@@ -1,12 +1,20 @@
 # Milestone 1: baselines and judge validation
 
 Run on 14 Nov 2026. All three baselines use `claude-opus-5-5` at effort `medium`, graded by `claude-opus-5-5`
-at effort `medium`. One run per question, so no variance estimate yet. Total cost: $13.77.
+at effort `medium` with judge rubric v1. One run per question, so no variance estimate yet. Total cost:
+$13.77 for the runs, plus $0.92 to re-validate the judge with rubric v2.
 
 ## Scores
 
 Share of answers graded correct. "Clean" leaves out the three questions whose reference answer contradicts
-its own working (see DESIGN.md, section 2).
+its own working (see DESIGN.md, section 2). **Grounded** means correct *and* citing a page the benchmark
+marks as evidence; it is what separates retrieval from what the model remembers.
+
+| Baseline | Correct | Grounded | Cites any page |
+| --- | ---: | ---: | ---: |
+| Oracle | 95.3% | **95.3%** | 100% |
+| Closed book | 74.0% | **0%** | 0% |
+| BM25, top 5 pages | 46.0% | **22.7%** | 97% |
 
 | Baseline | What the model sees | Dev (50) | Test (100) | All (150) | All, clean | Refusals | Evidence page given |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -20,24 +28,30 @@ Cost per question, answer plus grading: oracle $0.021, closed book $0.020, BM25 
 ## Judge validation
 
 The judge graded 150 of the paper's human-labelled answers, 50 per human label, sampled with a fixed seed.
+The same sample was graded with two versions of the rubric.
 
-| | |
-| --- | --- |
-| Agreement with the human label | **90%** (135 of 150) |
-| Cohen's kappa | **0.85** |
-| Cost | $0.90 |
+| Rubric | Agreement with people | Cohen's kappa | Cost |
+| --- | ---: | ---: | ---: |
+| v1 | 90% (135 of 150) | 0.85 | $0.90 |
+| **v2** | **94% (141 of 150)** | **0.91** | $0.92 |
+
+v1 graded non-answers (pasted filing text, a greeting, working that stops without a result) as refusals,
+where the paper's reviewers graded them incorrect. v2 grades them incorrect and keeps "refusal" for an
+explicit decline. That removed five of the six cases where people said incorrect and the judge said
+refusal. v2 is the rubric from here on.
+
+v2 confusion counts:
 
 | Human \ Judge | correct | incorrect | refusal |
 | --- | ---: | ---: | ---: |
 | correct | 47 | 3 | 0 |
-| incorrect | 3 | 41 | 6 |
+| incorrect | 2 | 47 | 1 |
 | refusal | 1 | 2 | 47 |
 
-The largest disagreement is definitional. In six cases people graded an output as incorrect where the
-judge called it a refusal. Each of those outputs was not an answer at all: pasted filing text, a greeting,
-or "cannot calculate". Our rubric says a non-answer is a refusal, while the paper's reviewers counted
-garbage output as incorrect. Either convention is defensible; this one should be aligned with the paper's
-before the headline run (see next steps). The other nine disagreements are close calls in both directions.
+The nine remaining disagreements are close calls in both directions, such as a sign convention people
+accepted and the judge did not. The baseline answers above were graded with v1. The change affects
+non-answers only, and Opus's answers are well formed, so a large shift is unlikely. They will be
+re-graded with v2 at the next full run so every published number uses one rubric.
 
 ## What this shows
 
@@ -48,7 +62,14 @@ before the headline run (see next steps). The other nine disagreements are close
   **grounded accuracy**, meaning correct *and* supported by a cited page that holds the evidence.
 - This changes the plan for milestone 4 (see next steps).
 
-**2. Plain keyword search is worse than no documents.**
+**2. Grounding halves the BM25 score, and the strict definition undercounts it.**
+- BM25 is 46% correct but only 22.7% grounded.
+- All 35 correct-but-ungrounded answers came from questions where retrieval missed the evidence page.
+  The model then cited a different page, typically a summary table that repeats the figure.
+- So "cites an evidence page" is strict: the benchmark marks one page, while filings repeat key figures.
+  A fairer check, that the cited page contains the reference figure, is a next step.
+
+**3. Plain keyword search is worse than no documents.**
 - BM25 put an evidence page in the top 5 for only 41 of 150 questions (27%).
 - The prompt tells the model to answer only from the excerpts, so when retrieval missed, it said so
   instead of falling back on memory: 66 of its 67 refusals came after a miss.
@@ -56,7 +77,7 @@ before the headline run (see next steps). The other nine disagreements are close
   between 46% and the 95% ceiling is almost all retrieval. Milestones 2 and 3 (table-aware parsing,
   hybrid retrieval) target it.
 
-**3. The ceiling is 95%, and the misses are mostly method choices.** The seven oracle misses:
+**4. The ceiling is 95%, and the misses are mostly method choices.** The seven oracle misses:
 
 | Question | What happened |
 | --- | --- |
@@ -72,17 +93,17 @@ review list with the three known contradictory keys.
 
 ## Next steps
 
-1. **Add grounded accuracy** to the runner: an answer counts as grounded when it is correct and cites a
-   page that holds the evidence. Report it next to plain accuracy from milestone 4 on.
-2. **Align the "non-answer" rule** with the paper's reviewers (non-answers are incorrect, explicit
-   declines are refusals) and re-run the judge validation, about $1.
-3. **Milestone 2:** table-aware parsing, measured by whether each evidence text is recoverable from its
+1. Done: grounded accuracy is in every run summary, from saved answers and with no API calls.
+2. Done: judge rubric v2 (94% agreement, kappa 0.91).
+3. **Check cited pages for the figure**, so citations to a page that repeats the evidence also count as
+   grounded. Report both definitions.
+4. **Milestone 2:** table-aware parsing, measured by whether each evidence text is recoverable from its
    parsed page.
-4. **Milestone 3:** hybrid retrieval, measured by evidence-page hit rate on the dev split (BM25 baseline:
+5. **Milestone 3:** hybrid retrieval, measured by evidence-page hit rate on the dev split (BM25 baseline:
    13 of 50).
 
 ## Files
 
 - `oracle.json`, `closed_book.json`, `bm25.json`: run summaries by split, cost and latency.
-- `judge-validation.json`: agreement, kappa and confusion counts.
+- `judge-validation-v1.json`, `judge-validation-v2.json`: agreement, kappa and confusion counts per rubric.
 - Per-question answers and grades stay in `runs/`, which is not committed.

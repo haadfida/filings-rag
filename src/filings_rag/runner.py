@@ -21,6 +21,7 @@ from pathlib import Path
 from filings_rag import answer as answer_mod
 from filings_rag import judge as judge_mod
 from filings_rag.benchmark import Question, load_labelled_answers, load_questions, split_of
+from filings_rag.citations import cited_pages, cites_evidence
 from filings_rag.llm import LLM
 
 RUNS_DIR = Path(__file__).resolve().parents[2] / "runs"
@@ -76,6 +77,7 @@ def run(
         "effort": effort,
         "judge_model": judge_model,
         "judge_effort": judge_effort,
+        "judge_version": judge_mod.JUDGE_VERSION,
     }
     cfg_path = run_dir / "config.json"
     if cfg_path.exists() and json.loads(cfg_path.read_text()) != config:
@@ -144,15 +146,29 @@ def run(
     return summary
 
 
-def _scores(ids: list[str], grades: dict[str, dict]) -> dict:
-    labels = [grades[i]["label"] for i in ids if i in grades and grades[i].get("label")]
-    n = len(labels)
-    c = Counter(labels)
+def _scores(qs: list[Question], answers: dict[str, dict], grades: dict[str, dict]) -> dict:
+    """Shares of correct, incorrect and refused answers, plus citation-based measures.
+
+    grounded: correct and cites at least one evidence page. cites_a_page: cites any page at all.
+    """
+    graded = [q for q in qs if q.id in grades and grades[q.id].get("label")]
+    n = len(graded)
+    c = Counter(grades[q.id]["label"] for q in graded)
+    grounded = sum(
+        grades[q.id]["label"] == "correct" and cites_evidence(q, answers[q.id].get("answer")) for q in graded
+    )
+    cites = sum(bool(cited_pages(answers[q.id].get("answer"))) for q in graded)
+
+    def share(k: int) -> float | None:
+        return round(k / n, 3) if n else None
+
     return {
         "n": n,
-        "correct": round(c["correct"] / n, 3) if n else None,
-        "incorrect": round(c["incorrect"] / n, 3) if n else None,
-        "refusal": round(c["refusal"] / n, 3) if n else None,
+        "correct": share(c["correct"]),
+        "grounded": share(grounded),
+        "incorrect": share(c["incorrect"]),
+        "refusal": share(c["refusal"]),
+        "cites_a_page": share(cites),
     }
 
 
@@ -160,9 +176,12 @@ def summarise(questions: list[Question], answers: dict, grades: dict, config: di
     ok = [q for q in questions if q.id in answers and "error" not in answers[q.id]]
     summary: dict = {"config": config}
     for split in ("dev", "test", "all"):
-        ids = [q.id for q in ok if split == "all" or split_of(q) == split]
-        clean = [q.id for q in ok if (split == "all" or split_of(q) == split) and not q.key_is_contradictory]
-        summary[split] = {"scores": _scores(ids, grades), "scores_clean_key": _scores(clean, grades)}
+        in_split = [q for q in ok if split == "all" or split_of(q) == split]
+        clean = [q for q in in_split if not q.key_is_contradictory]
+        summary[split] = {
+            "scores": _scores(in_split, answers, grades),
+            "scores_clean_key": _scores(clean, answers, grades),
+        }
 
     hits = []
     for q in ok:
@@ -195,7 +214,7 @@ def validate_judge(n: int, model: str, effort: str, workers: int = 4, seed: int 
         group = [a for a in pool if a.label == label]
         sample += rng.sample(group, min(len(group), n // 3))
 
-    name = f"judge-validation_{model}_{effort}_n{n}_seed{seed}"
+    name = f"judge-validation_{judge_mod.JUDGE_VERSION}_{model}_{effort}_n{n}_seed{seed}"
     out = RUNS_DIR / name / "grades.jsonl"
     graded = _read(out)
     llm = LLM()
@@ -244,3 +263,14 @@ def _kappa(rows: list[dict]) -> float | None:
     j = Counter(r["label"] for r in rows)
     pe = sum(h[label] * j[label] for label in judge_mod.LABELS) / (n * n)
     return round((po - pe) / (1 - pe), 3) if pe < 1 else None
+
+
+def resummarise(name: str) -> dict:
+    """Rebuild a run's summary.json from its saved answers and grades. Makes no API calls."""
+    run_dir = RUNS_DIR / name
+    config = json.loads((run_dir / "config.json").read_text())
+    answers = _read(run_dir / "answers.jsonl")
+    questions = [q for q in load_questions() if q.id in answers]
+    summary = summarise(questions, answers, _read(run_dir / "grades.jsonl"), config)
+    (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    return summary

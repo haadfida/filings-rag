@@ -11,6 +11,11 @@ from filings_rag.llm import LLM, Result
 
 LABELS = ("correct", "incorrect", "refusal")
 
+# Bump when SYSTEM or SCHEMA changes, so grades from different rubrics are never mixed in one run.
+# v1: non-answers (pasted text, greetings) graded as refusal.
+# v2: non-answers graded as incorrect; refusal only for an explicit decline. Matches the paper's reviewers.
+JUDGE_VERSION = "v2"
+
 SYSTEM = """You grade answers to questions about companies' financial filings against a reference answer.
 
 Labels:
@@ -20,10 +25,11 @@ differences within the precision the reference uses or about 1% relative, whiche
 yes/no or explanatory questions, the candidate's conclusion and the key facts it relies on must agree \
 with the reference; extra correct detail is fine.
 - incorrect: the candidate gives an answer that disagrees with the reference on the conclusion or on a \
-key figure, or answers a different question.
-- refusal: the candidate does not give an answer, for example says it cannot answer or lacks the \
-information, without committing to a figure or conclusion. A hedged answer that still commits to one \
-is graded correct or incorrect, not refusal.
+key figure, or answers a different question. Output that does not address the question at all (pasted \
+document text, a greeting, unrelated content, or working that stops without a result) is also incorrect.
+- refusal: the candidate explicitly declines, saying it cannot answer or that the information it needs \
+is missing, and commits to no figure or conclusion. A hedged answer that still commits to one is graded \
+correct or incorrect, not refusal.
 
 Grade only against the reference; do not use your own knowledge of the company to overrule it."""
 

@@ -56,6 +56,16 @@ def cmd_validate_judge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    from filings_rag import runner
+
+    names = args.names or sorted(p.parent.name for p in runner.RUNS_DIR.glob("*/answers.jsonl"))
+    for name in names:
+        s = runner.resummarise(name)
+        print(f"{name}: {json.dumps(s['all']['scores'])}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     parser = argparse.ArgumentParser(prog="filings-rag")
@@ -75,6 +85,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--workers", type=int, default=4)
     r.add_argument("--name", help="run directory name under runs/ (default from the settings)")
     r.set_defaults(func=cmd_run)
+
+    rep = sub.add_parser("report", help="rebuild run summaries from saved answers (no API calls)")
+    rep.add_argument("names", nargs="*", help="run names under runs/ (default: all)")
+    rep.set_defaults(func=cmd_report)
 
     v = sub.add_parser("validate-judge", help="grade human-labelled answers and measure agreement")
     v.add_argument("--n", type=int, default=150, help="sample size, balanced across the three labels")

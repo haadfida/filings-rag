@@ -66,6 +66,21 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_parse_eval(_: argparse.Namespace) -> int:
+    from collections import Counter as C
+
+    from filings_rag.chunk import chunk_document
+    from filings_rag.parse import PARSER_VERSION
+    from filings_rag.parse_eval import compare
+
+    result = compare()
+    chunks = [c for d in sorted({q.doc_name for q in load_questions()}) for c in chunk_document(d)]
+    result["parser_version"] = PARSER_VERSION
+    result["chunks"] = {"total": len(chunks), **dict(C(c.kind for c in chunks))}
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     parser = argparse.ArgumentParser(prog="filings-rag")
@@ -85,6 +100,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--workers", type=int, default=4)
     r.add_argument("--name", help="run directory name under runs/ (default from the settings)")
     r.set_defaults(func=cmd_run)
+
+    sub.add_parser("parse-eval", help="measure parsing against the benchmark (no API calls)").set_defaults(
+        func=cmd_parse_eval
+    )
 
     rep = sub.add_parser("report", help="rebuild run summaries from saved answers (no API calls)")
     rep.add_argument("names", nargs="*", help="run names under runs/ (default: all)")

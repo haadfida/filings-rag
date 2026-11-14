@@ -76,3 +76,16 @@ def test_downloaded_benchmark_matches_the_checked_facts():
     assert sum(len(q.evidence) for q in qs) == 189
     assert all(q.doc_name in docs for q in qs)
     assert set(CONTRADICTORY_KEYS) <= {q.id for q in qs}
+
+
+@pytest.mark.data
+@needs_data
+def test_split_is_50_dev_100_test_and_balanced_by_type():
+    from collections import Counter
+
+    from filings_rag.benchmark import split_of
+
+    qs = load_questions()
+    assert Counter(split_of(q) for q in qs) == {"dev": 50, "test": 100}
+    dev_types = Counter(q.question_type for q in qs if split_of(q) == "dev")
+    assert sorted(dev_types.values()) == [16, 17, 17]

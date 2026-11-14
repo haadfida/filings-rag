@@ -24,6 +24,27 @@ RAW = f"https://raw.githubusercontent.com/{REPO}/{COMMIT}"
 USER_AGENT = "filings-rag/0.1 (benchmark download)"
 EXPECTED_QUESTIONS = 150
 
+# Model answers from the FinanceBench paper, each labelled by a human reviewer. Used to check that our
+# grader agrees with people before we trust it (milestone 1). Listed from the repository at COMMIT.
+RESULT_FILES = [
+    "claude-2_inContext.jsonl",
+    "claude-2_inContext_reverse.jsonl",
+    "gpt-4-1106-preview_closedBook.jsonl",
+    "gpt-4-1106-preview_inContext.jsonl",
+    "gpt-4-1106-preview_inContext_reverse.jsonl",
+    "gpt-4-1106-preview_oracle.jsonl",
+    "gpt-4-1106-preview_oracle_reverse.jsonl",
+    "gpt-4-1106-preview_sharedStore.jsonl",
+    "gpt-4-1106-preview_singleStore.jsonl",
+    "gpt-4_closedBook.jsonl",
+    "gpt-4_oracle.jsonl",
+    "gpt-4_oracle_reverse.jsonl",
+    "gpt-4_sharedStore.jsonl",
+    "gpt-4_singleStore.jsonl",
+    "llama2_sharedStore.jsonl",
+    "llama2_singleStore.jsonl",
+]
+
 
 @dataclass
 class Report:
@@ -74,7 +95,8 @@ def download(data_dir: Path = DATA_DIR, pause: float = 0.5) -> Report:
         if dest.exists() and files.get(rel) == sha256(dest):
             report.skipped.append(rel)
             return
-        _fetch(client, f"{RAW}/{rel if rel.startswith('pdfs/') else 'data/' + rel}", dest)
+        source = rel if rel.startswith(("pdfs/", "results/")) else f"data/{rel}"
+        _fetch(client, f"{RAW}/{source}", dest)
         files[rel] = sha256(dest)
         report.downloaded.append(rel)
         time.sleep(pause)
@@ -82,6 +104,8 @@ def download(data_dir: Path = DATA_DIR, pause: float = 0.5) -> Report:
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=60, follow_redirects=True) as client:
         get(QUESTIONS_FILE)
         get(DOCUMENTS_FILE)
+        for name in RESULT_FILES:
+            get(f"results/{name}")
         for doc in sorted({q.doc_name for q in load_questions(data_dir)}):
             get(f"pdfs/{doc}.pdf")
 
@@ -101,6 +125,9 @@ def verify(data_dir: Path = DATA_DIR) -> list[str]:
         problems.append(f"expected {EXPECTED_QUESTIONS} questions, found {len(questions)}")
     if len({q.id for q in questions}) != len(questions):
         problems.append("duplicate question ids")
+    missing_results = [n for n in RESULT_FILES if not (data_dir / "results" / n).exists()]
+    if missing_results:
+        problems.append(f"{len(missing_results)} human-labelled result file(s) missing")
 
     pages_needed: dict[str, int] = {}
     for q in questions:

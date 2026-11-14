@@ -118,3 +118,69 @@ def load_documents(data_dir: Path = DATA_DIR) -> dict[str, Document]:
 
 def pdf_path(doc_name: str, data_dir: Path = DATA_DIR) -> Path:
     return data_dir / "pdfs" / f"{doc_name}.pdf"
+
+
+# Human labels in the paper's result files, mapped to our three grades.
+HUMAN_LABELS = {"Correct Answer": "correct", "Incorrect Answer": "incorrect", "Refusal": "refusal"}
+
+
+@dataclass(frozen=True)
+class LabelledAnswer:
+    """A model answer from the FinanceBench paper with the grade a human reviewer gave it."""
+
+    question_id: str
+    source: str  # result file stem, e.g. "gpt-4_oracle"
+    model_answer: str
+    label: str  # correct | incorrect | refusal
+
+
+def load_labelled_answers(data_dir: Path = DATA_DIR) -> list[LabelledAnswer]:
+    out: list[LabelledAnswer] = []
+    for path in sorted((data_dir / "results").glob("*.jsonl")):
+        for raw in _read_jsonl(path):
+            label = HUMAN_LABELS.get(raw.get("label", ""))
+            if label is None or raw.get("model_answer") is None:
+                continue
+            out.append(LabelledAnswer(raw["financebench_id"], path.stem, str(raw["model_answer"]), label))
+    return out
+
+
+def split_of(question: Question) -> str:
+    """Fixed dev/test split: "dev" or "test". Tune only on dev; the test score is the headline.
+
+    Within each question type, questions are ordered by a hash of their id and the first third go to
+    dev, giving 50 dev and 100 test questions. Hash order is stable across machines and runs.
+    """
+    return _SPLIT[question.id]
+
+
+def _build_split(questions: list[Question]) -> dict[str, str]:
+    import hashlib
+
+    split: dict[str, str] = {}
+    by_type: dict[str, list[Question]] = {}
+    for q in questions:
+        by_type.setdefault(q.question_type, []).append(q)
+    # One third of all questions go to dev; the remainder of the division goes to the types in name order.
+    total_dev = round(len(questions) / 3)
+    types = sorted(by_type)
+    quota = {t: len(by_type[t]) // 3 for t in types}
+    for t in types[: total_dev - sum(quota.values())]:
+        quota[t] += 1
+    for t in types:
+        group = sorted(by_type[t], key=lambda q: hashlib.sha256(q.id.encode()).hexdigest())
+        n_dev = quota[t]
+        for i, q in enumerate(group):
+            split[q.id] = "dev" if i < n_dev else "test"
+    return split
+
+
+class _LazySplit(dict):
+    def __missing__(self, key: str) -> str:
+        if not self:
+            self.update(_build_split(load_questions()))
+            return self[key]
+        raise KeyError(key)
+
+
+_SPLIT: dict[str, str] = _LazySplit()

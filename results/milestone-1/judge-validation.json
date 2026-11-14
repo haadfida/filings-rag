@@ -1,0 +1,16 @@
+{
+  "n": 150,
+  "agreement": 0.9,
+  "cohens_kappa": 0.85,
+  "confusion_human_to_judge": {
+    "correct->correct": 47,
+    "correct->incorrect": 3,
+    "incorrect->correct": 3,
+    "incorrect->incorrect": 41,
+    "incorrect->refusal": 6,
+    "refusal->correct": 1,
+    "refusal->incorrect": 2,
+    "refusal->refusal": 47
+  },
+  "cost_usd": 0.9031
+}

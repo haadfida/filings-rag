@@ -3,7 +3,7 @@
 Question answering over company filings, with a page citation for every figure. Measured on the
 FinanceBench open set; the design and the reasoning behind it are in [DESIGN.md](DESIGN.md).
 
-Status: milestone 0 (data). No model calls yet.
+Status: milestone 1 done (baselines and judge validation). Results: [results/milestone-1/RESULTS.md](results/milestone-1/RESULTS.md).
 
 ## Setup
 

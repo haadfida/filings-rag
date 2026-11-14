@@ -104,7 +104,11 @@ class LLM:
         )
         data = None
         if response.stop_reason == "end_turn":
-            text = next((b.text for b in response.content if b.type == "text"), None)
-            if text is not None:
+            # Join every text block: a response can carry an empty text block before the JSON one.
+            text = "".join(b.text for b in response.content if b.type == "text").strip()
+            try:
                 data = json.loads(text)
+            except json.JSONDecodeError as e:
+                kinds = [b.type for b in response.content]
+                raise ValueError(f"no JSON in response (blocks {kinds}, text {text[:80]!r})") from e
         return Result(data, response.stop_reason, usage, model, latency, response._request_id)

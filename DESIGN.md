@@ -7,6 +7,7 @@ Status: plan only, nothing built. Facts below were checked on 10 Nov 2026; each 
 One Python engine that answers questions about a company from its own filings and cites the page for every figure.
 
 - **Phase 1, FinanceBench:** a comparable score on a public benchmark over US filings.
+- **Phase 1b, public MCP server:** the retrieval half of the engine as a free MCP server over live SEC filings, so any agent (Claude Code, Cursor and others) can search a company's filings and get passages with citations. See section 3a.
 - **Phase 2, PSX:** the same engine on Pakistan Stock Exchange filings, as a live demo with real users.
 
 What the project has to prove, in order: retrieval over long, messy PDFs; honest measurement; cost and latency awareness; a record of failures and fixes.
@@ -77,6 +78,46 @@ question ──> retrieve ──> rerank ──> answer with page citations ─�
 | Grade | Section 5 | |
 | Trace | One JSON line per question: retrieved pages, timings, tokens, cost, model, prompt version | Enough for a failures page and a cost table |
 
+## 3a. Public MCP server
+
+The retrieval engine, packaged so other people's agents can use it. This is the "real users" evidence for phase 1, before PSX.
+
+**Principle: the server retrieves, the caller's model reasons.** The server makes no Claude calls. It returns passages with citations and the user's own agent writes the answer. So it costs nothing per query to run, needs no API key from anyone, and holds no secrets.
+
+| Tool | Input | Returns |
+| --- | --- | --- |
+| `find_filings` | ticker or company name, form type (10-K, 10-Q, 8-K), year range | Filing list: accession number, form, period, filing date, EDGAR URL |
+| `search_filing` | accession number, question, `k` | Top passages and tables with section, page where known, and a link to the source |
+| `get_page` | accession number, page or section | The full text of that page or section, for checking a passage in context |
+
+All three are read-only.
+
+**Data source: SEC EDGAR, fetched live.** US filings on EDGAR are public records, so a commercial listing later is not blocked by the data. The FinanceBench files are never bundled: they are licensed for noncommercial use only.
+
+- EDGAR's fair-access rules ask for at most 10 requests a second and a `User-Agent` that names the operator with a contact address (open question 9).
+- Downloaded filings are cached locally, keyed by accession number.
+- Filings are indexed on first use, so the first question about a filing is slow and later ones are fast.
+
+**The page-number problem.** Most EDGAR filings are HTML, not PDF, so "page" is not built in.
+
+- Page breaks in the HTML and the printed page numbers in footers recover pages for most 10-Ks.
+- Where they are missing, cite the section ("Item 7", "Note 12") and an anchor link instead.
+- Measure how often each case happens.
+
+**Packaging and listing.**
+
+- Python package using the official MCP Python SDK, run locally over stdio (`uvx filings-rag-mcp`).
+- Optionally, a hosted Streamable HTTP endpoint later.
+- Code under the MIT licence.
+- Listed free on the official MCP registry.
+- Paid marketplaces are a later, separate decision (open question 10).
+
+**How it is measured.** 112 of the 150 FinanceBench questions are about 10-K reports, which also exist on EDGAR.
+
+- Map each of those filings to its EDGAR accession number.
+- Report the evidence-page hit rate through the MCP tools next to the hit rate on the original PDFs.
+- If the hit rate drops on EDGAR's HTML, the gap is published, not hidden.
+
 ## 4. Stack
 
 | Choice | Reason |
@@ -129,6 +170,8 @@ Sized for evenings; about three weeks.
 | 5 | Iterate on failures | Failure log; development score stops improving |
 | 6 | Test run, three repeats, model comparison | Headline table |
 | 7 | Tracing, cost table, demo UI with bring-your-own-key | Hosted demo |
+| 7a | MCP server over live EDGAR (section 3a) | Installs with one command; hit rate on the 112 10-K questions reported next to the PDF hit rate |
+| 7b | Registry listing and install guide | Listed on the official MCP registry; usage counted without collecting questions |
 | 8 | Write-up: README, failures page, portfolio card | Published |
 | 9 | PSX pilot (after open question 7 is settled) | 10 companies, 50 hand-checked questions |
 | 10 | Stretch: Fin-RATE sample | Score on 150 multi-document questions |
@@ -157,7 +200,8 @@ Each has my recommendation first.
 5. **Agent step.** Single retrieve-then-answer / let the model issue follow-up searches. Recommendation: single pass first, agent as a measured upgrade.
 6. **Embedding model.** Small general model / finance-tuned model. Recommendation: start small and general; compare one alternative.
 7. **PSX source.** The PSX portal's terms forbid automated collection. Options: ask PSX for written permission / take reports from each company's own investor-relations site and keep a small corpus with links back and short quotes only / stay on US filings. Recommendation: company sites, 10 companies, and email PSX in parallel.
-8. **Repository name and where the project lives on disk.**
+8. **Repository name.** Decided so far: the project lives in `Documents/project/filings-rag`.
+9. **EDGAR contact.** The SEC asks every automated client to name a contact in its `User-Agent`. Recommendation: a dedicated project address.
 
 ## 9. Risks
 
@@ -166,6 +210,8 @@ Each has my recommendation first.
 - **A crowded top end.** One 2026 paper self-reports 89.3%. The score alone will not stand out; the judge validation, the key audit and the failure log are what will.
 - **PSX legal exposure.** See open question 7.
 - **Budget.** See section 7.
+- **EDGAR access.** Rate limits or blocking if the server is used heavily. Mitigated by the local cache and by staying under 10 requests a second.
+- **HTML page numbers.** Citations may be section-level for some filings. Measured and published, as in section 3a.
 
 ## Sources
 
@@ -176,3 +222,6 @@ Each has my recommendation first.
 - T²-RAGBench: https://t2ragbench.demo.hcds.uni-hamburg.de/
 - MimirRAG (89.3% self-reported): https://arxiv.org/html/2605.25030v1
 - Answer-key audit: https://gov.tesseract.academy/research/financial-answer-verification
+- SEC EDGAR fair access (10 requests a second, declared User-Agent): https://www.sec.gov/os/accessing-edgar-data
+- MCP Python SDK: https://github.com/modelcontextprotocol/python-sdk
+- Official MCP registry: https://registry.modelcontextprotocol.io

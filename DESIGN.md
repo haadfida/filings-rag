@@ -210,6 +210,40 @@ How the open questions in the original plan were settled.
 8. **EDGAR contact.** The MCP server will send a dedicated project contact in its `User-Agent`, as the
    SEC asks.
 
+## 8a. PSX pilot: sources and terms (checked 15–16 Nov 2026)
+
+The PSX data portal's terms require written permission for automated access and compilations. A
+request went to PSX's Market Data Team on 15 Nov 2026; until it is answered, nothing is fetched from any
+psx.com.pk site. The pilot instead takes each company's reports from the company's own investor-relations
+site, the way FinanceBench takes US filings from their source: downloaded at build time, hashed, never
+re-hosted. Only questions, short quotations, page references and links back are published.
+
+Each candidate site's terms were read (two were re-checked by hand). Pilot set, the latest annual report
+of each:
+
+| Company (ticker) | Sector | Report | Terms found |
+| --- | --- | --- | --- |
+| Meezan Bank (MEBL) | Islamic bank | [Annual Report 2025](https://www.meezanbank.com/wp-content/themes/mbl/downloads/annualreport2025.pdf), 24 MB | Disclaimer covers privacy and warranties only |
+| Hub Power (HUBC) | Power | [Integrated Annual Report 2026](https://hubpower.com/wp-content/uploads/2026/09/HUBCO-Integrated-Annual-Report-2026.pdf), 16 MB | No terms page |
+| Engro Fertilizers (EFERT) | Fertiliser | [Annual Report 2025](https://www.engrofertilizers.com/themes/engro/documents/Engro-Fertilizers-Annual-Report-2025.pdf) | Warranty-only disclaimer |
+| Systems Limited (SYS) | Technology | [Annual Report 2025](https://www.systemsltd.com/sites/default/files/2026-04/Systems%20Limited-Annual%20Report%202025.pdf), 16 MB | Terms page holds a privacy policy only |
+| D.G. Khan Cement (DGKC) | Cement | [Annual Report 2026](https://www.dgcement.com/financial-reports/DGAnnual2026.pdf), 10 MB | No terms page |
+| Engro Holdings | Conglomerate | [Annual Report 2025](https://www.engro.com/app/media/2026/04/EH-Annual-Report-2025.pdf), 43 MB | Warranty-only disclaimer |
+
+Excluded, and why:
+- **HBL, UBL:** terms forbid copying or downloading beyond personal use without written consent.
+- **PSO:** extracts are allowed for non-commercial use, but not "incorporated in any other work,
+  publication, or site", which a published benchmark would be.
+- **Nestlé Pakistan:** terms forbid deep linking, and our manifest links to the PDFs.
+- **Lucky Cement:** terms forbid extracting content by automated means.
+- **OGDC, PPL, Mari, FFC, MCB, Fauji Cement:** the sites refuse automated clients (HTTP 403); terms not
+  verified. Candidates only if a company grants permission, which would also fill the missing
+  exploration-and-production sector.
+
+The silence of a terms page is not a licence: the reports remain each company's copyright. The pilot
+relies on the same practice as the US phase (research use, no re-hosting, short attributed quotations),
+and any company that objects is removed.
+
 ## 9. Risks
 
 - **Overfitting 150 questions.** Mitigated by the held-out split and by reporting development and test separately.

@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("stats", help="summarise the downloaded benchmark").set_defaults(func=cmd_stats)
 
     r = sub.add_parser("run", help="answer and grade questions with a baseline (calls the API)")
-    r.add_argument("--mode", choices=("closed_book", "oracle", "bm25"), required=True)
+    r.add_argument("--mode", choices=("closed_book", "oracle", "bm25", "routed"), required=True)
     r.add_argument("--model", choices=sorted(PRICES), default=DEFAULT_MODEL)
     r.add_argument("--effort", choices=EFFORTS, default="medium")
     r.add_argument("--judge-model", choices=sorted(PRICES), default=DEFAULT_MODEL)

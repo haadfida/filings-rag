@@ -3,6 +3,8 @@
 - closed_book: the question alone. Measures what the model knows or guesses without documents.
 - oracle: the full text of the evidence page(s) the benchmark marks. The ceiling for retrieval work.
 - bm25: the top 5 pages of the named filing by plain BM25. The simplest retrieval baseline.
+- routed: the top 5 chunks of the named filing from milestone 3's retrieval (statement routing, then
+  re-ranking). The system under test.
 """
 
 from __future__ import annotations
@@ -13,8 +15,9 @@ from filings_rag.benchmark import Question
 from filings_rag.llm import LLM, Result
 from filings_rag.pages import bm25_pages, page_texts
 
-MODES = ("closed_book", "oracle", "bm25")
+MODES = ("closed_book", "oracle", "bm25", "routed")
 BM25_K = 5
+ROUTED_K = 5
 
 SYSTEM = """You answer questions about public companies' financial filings.
 
@@ -56,6 +59,12 @@ def build_context(q: Question, mode: str) -> Context:
         ranked = bm25_pages(q.doc_name, q.question, BM25_K)
         pages = [(q.doc_name, p) for p in ranked]
         blocks = [f"[{q.doc_name}, p. {p + 1}]\n{texts[p]}" for p in ranked]
+    elif mode == "routed":
+        from filings_rag.retrieve import doc_index
+
+        hits = doc_index(q.doc_name).search("routed", q.question, ROUTED_K)
+        pages = list(dict.fromkeys((h.chunk.doc_name, h.chunk.page) for h in hits))
+        blocks = [f"[{h.chunk.doc_name}, p. {h.chunk.page + 1}]\n{h.chunk.text}" for h in hits]
     else:
         raise ValueError(f"unknown mode {mode!r}")
     return Context(pages, "\n\n---\n\n".join(blocks))

@@ -81,6 +81,14 @@ def cmd_parse_eval(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_retrieval_eval(args: argparse.Namespace) -> int:
+    from filings_rag.retrieval_eval import evaluate
+
+    result = evaluate(args.split, tuple(args.methods.split(",")), open_setting=args.open)
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     parser = argparse.ArgumentParser(prog="filings-rag")
@@ -104,6 +112,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("parse-eval", help="measure parsing against the benchmark (no API calls)").set_defaults(
         func=cmd_parse_eval
     )
+
+    re_ = sub.add_parser("retrieval-eval", help="evidence-page hit rates per retrieval method (no API calls)")
+    re_.add_argument("--split", choices=("dev", "test", "all"), default="dev")
+    re_.add_argument("--methods", default="bm25,dense,hybrid,rerank,routed")
+    re_.add_argument("--open", action="store_true", help="also search all filings at once")
+    re_.set_defaults(func=cmd_retrieval_eval)
 
     rep = sub.add_parser("report", help="rebuild run summaries from saved answers (no API calls)")
     rep.add_argument("names", nargs="*", help="run names under runs/ (default: all)")

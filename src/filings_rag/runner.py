@@ -39,15 +39,32 @@ def _parallel(items: Iterable, fn: Callable[[object], dict], out: Path, workers:
     out.parent.mkdir(parents=True, exist_ok=True)
     items = list(items)
     done = 0
-    with ThreadPoolExecutor(max_workers=workers) as pool, out.open("a", encoding="utf-8") as f:
-        futures = [pool.submit(fn, item) for item in items]
-        for fut in as_completed(futures):
-            row = fut.result()
+    written: set[int] = set()
+    with out.open("a", encoding="utf-8") as f:
+
+        def write(i: int, row: dict) -> None:
+            nonlocal done
             with lock:
                 f.write(json.dumps(row) + "\n")
                 f.flush()
+                written.add(i)
                 done += 1
                 print(f"  {done}/{len(items)} {row['key']} {row.get('label') or row.get('stop_reason')}")
+
+        pool = ThreadPoolExecutor(max_workers=workers)
+        futures = {pool.submit(fn, item): i for i, item in enumerate(items)}
+        try:
+            for fut in as_completed(futures):
+                write(futures[fut], fut.result())
+        except BaseException:
+            # Ctrl-C or a crash: cancel queued calls so they are not paid for, let the few in flight
+            # finish, and keep their rows so a resume does not pay for them again.
+            pool.shutdown(wait=True, cancel_futures=True)
+            for fut, i in futures.items():
+                if i not in written and fut.done() and not fut.cancelled() and fut.exception() is None:
+                    write(i, fut.result())
+            raise
+        pool.shutdown()
 
 
 def select(split: str, limit: int | None, ids: list[str] | None) -> list[Question]:
@@ -79,6 +96,7 @@ def run(
         "judge_model": judge_model,
         "judge_effort": judge_effort,
         "judge_version": judge_mod.JUDGE_VERSION,
+        "fingerprint": answer_mod.fingerprint(mode),
     }
     cfg_path = run_dir / "config.json"
     if cfg_path.exists() and json.loads(cfg_path.read_text()) != config:
@@ -94,6 +112,8 @@ def run(
             ctx, res = answer_mod.answer(llm, q, mode, model, effort)
         except Exception as e:  # recorded and retried on the next run of this name
             return {"key": q.id, "error": f"{type(e).__name__}: {e}"}
+        if res.stop_reason == "max_tokens":  # cut off, not a wrong answer: an error row, retried next run
+            return {"key": q.id, "error": "answer cut off at max_tokens", "cost": res.cost}
         data = res.data or {}
         return {
             "key": q.id,
@@ -132,7 +152,11 @@ def run(
         except Exception as e:
             return {"key": qid, "error": f"{type(e).__name__}: {e}"}
         if not res.data:  # no label: an error row, so the next run of this name retries it
-            return {"key": qid, "error": f"judge returned no label (stop_reason={res.stop_reason})"}
+            return {
+                "key": qid,
+                "error": f"judge returned no label (stop_reason={res.stop_reason})",
+                "cost": res.cost,
+            }
         return {"key": qid, "label": res.data["label"], "reason": res.data["reason"], "cost": res.cost}
 
     to_grade = [
@@ -196,7 +220,7 @@ def summarise(questions: list[Question], answers: dict, grades: dict, config: di
         summary["evidence_page_given_rate"] = round(sum(hits) / len(hits), 3)
 
     answer_cost = sum(answers[q.id]["cost"] for q in ok)
-    judge_cost = sum(g.get("cost", 0.0) for g in grades.values())
+    judge_cost = sum(grades[q.id].get("cost", 0.0) for q in ok if q.id in grades)  # same questions
     lat = [answers[q.id]["latency_s"] for q in ok]
     summary["cost_usd"] = {
         "answers": round(answer_cost, 4),

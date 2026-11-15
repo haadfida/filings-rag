@@ -54,3 +54,16 @@ def build_prompt(q: Question, candidate: str) -> str:
 
 def grade(llm: LLM, q: Question, candidate: str, model: str, effort: str) -> Result:
     return llm.json(model=model, system=SYSTEM, user=build_prompt(q, candidate), schema=SCHEMA, effort=effort)
+
+
+def _fingerprint() -> str:
+    import hashlib
+    import inspect
+    import json
+
+    text = f"{SYSTEM}|{json.dumps(SCHEMA, sort_keys=True)}|{inspect.getsource(build_prompt)}"
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+
+# Changes whenever the rubric, schema or prompt changes; a test pins it so JUDGE_VERSION gets bumped too.
+PROMPT_FINGERPRINT = _fingerprint()

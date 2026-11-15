@@ -108,3 +108,33 @@ def build_prompt(q: Question, ctx: Context) -> str:
 def answer(llm: LLM, q: Question, mode: str, model: str, effort: str) -> tuple[Context, Result]:
     ctx = build_context(q, mode)
     return ctx, llm.json(model=model, system=SYSTEM, user=build_prompt(q, ctx), schema=SCHEMA, effort=effort)
+
+
+def fingerprint(mode: str) -> str:
+    """A hash of everything besides the model settings that shapes a run's answers and grades: the answer
+    and judge prompts, and the retrieval constants. Stored in each run's config, so resuming a run name
+    after any of these change is refused instead of mixing two systems in one summary."""
+    import hashlib
+    import inspect
+    import json
+
+    from filings_rag import judge, retrieve
+
+    parts = [
+        SYSTEM,
+        json.dumps(SCHEMA, sort_keys=True),
+        inspect.getsource(build_prompt),
+        inspect.getsource(build_context),
+        judge.PROMPT_FINGERPRINT,
+        pipeline(mode),
+    ]
+    if mode.startswith("routed"):
+        parts += [
+            retrieve.EMBED_MODEL,
+            retrieve.RERANK_MODEL,
+            f"{retrieve.RERANK_POOL}|{retrieve.RERANK_CHARS}|{retrieve.RRF_K}|{retrieve.EMBED_MAX_CHARS}",
+            inspect.getsource(retrieve.Index.search_routed),
+            inspect.getsource(retrieve.Index.search_routed_rewrite),
+            inspect.getsource(retrieve.Index.search_rerank),
+        ]
+    return hashlib.sha256("\x1e".join(parts).encode()).hexdigest()[:12]

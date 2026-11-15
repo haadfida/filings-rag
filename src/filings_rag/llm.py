@@ -70,6 +70,11 @@ class Result:
         return self.usage.cost(self.model)
 
 
+# Output budget per effort. Opus 5.5 always thinks and its thinking counts against max_tokens, so higher
+# efforts need room or long answers are cut off (stop_reason "max_tokens"); the runner retries those.
+MAX_TOKENS = {"low": 8000, "medium": 16000, "high": 32000, "xhigh": 48000, "max": 64000}
+
+
 class LLM:
     def __init__(self, client: anthropic.Anthropic | None = None) -> None:
         self.client = client or anthropic.Anthropic(max_retries=4, timeout=600)
@@ -82,10 +87,11 @@ class LLM:
         user: str,
         schema: dict,
         effort: str = "medium",
-        max_tokens: int = 16000,
+        max_tokens: int | None = None,
     ) -> Result:
         if model not in PRICES:
             raise ValueError(f"unknown model {model!r}; known: {', '.join(PRICES)}")
+        max_tokens = max_tokens or MAX_TOKENS[effort]
         start = time.perf_counter()
         response = self.client.messages.create(
             model=model,

@@ -90,18 +90,37 @@ def embed_query(text: str) -> np.ndarray:
 
 
 def doc_vectors(doc_name: str) -> np.ndarray:
-    """Embeddings of a filing's chunks, in chunk order, computed once and cached."""
+    """Embeddings of a filing's chunks, in chunk order, computed once and cached.
+
+    The cache is valid only for the exact texts embedded: `.texts.sha256` holds a hash of them, so a
+    change to chunking or headers re-embeds instead of silently reusing stale vectors. Caches written
+    before the hash existed are checked by chunk ids once, then stamped with the hash.
+    """
+    import hashlib
+    import io
+
+    from filings_rag.cachefile import atomic_write_bytes, atomic_write_text, lock_for
+
     path = EMB_DIR / f"{doc_name}.npy"
     ids_path = EMB_DIR / f"{doc_name}.ids.json"
+    hash_path = EMB_DIR / f"{doc_name}.texts.sha256"
     chunks = chunk_document(doc_name)
     ids = [c.id for c in chunks]
-    if path.exists() and ids_path.exists() and json.loads(ids_path.read_text()) == ids:
-        return np.load(path)
-    vecs = embed_documents([indexed_text(c) for c in chunks])
-    EMB_DIR.mkdir(parents=True, exist_ok=True)
-    np.save(path, vecs)
-    ids_path.write_text(json.dumps(ids))
-    return vecs
+    texts = [indexed_text(c)[:EMBED_MAX_CHARS] for c in chunks]
+    digest = hashlib.sha256("\x1e".join(texts).encode("utf-8")).hexdigest()
+    with lock_for(f"emb:{doc_name}"):
+        if path.exists() and ids_path.exists() and json.loads(ids_path.read_text()) == ids:
+            if not hash_path.exists():
+                atomic_write_text(hash_path, digest)
+            if hash_path.read_text().strip() == digest:
+                return np.load(path)
+        vecs = embed_documents([indexed_text(c) for c in chunks])
+        buf = io.BytesIO()
+        np.save(buf, vecs)
+        atomic_write_bytes(path, buf.getvalue())
+        atomic_write_text(ids_path, json.dumps(ids))
+        atomic_write_text(hash_path, digest)
+        return vecs
 
 
 class Index:

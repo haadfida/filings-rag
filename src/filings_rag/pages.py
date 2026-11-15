@@ -14,6 +14,7 @@ import pymupdf
 from rank_bm25 import BM25Okapi
 
 from filings_rag.benchmark import DATA_DIR, pdf_path
+from filings_rag.cachefile import PDF_LOCK, atomic_write_text, lock_for
 
 CACHE_DIR = DATA_DIR.parent / "cache" / "pages"
 _TOKEN = re.compile(r"[a-z0-9]+(?:[.,][0-9]+)*")
@@ -22,13 +23,13 @@ _TOKEN = re.compile(r"[a-z0-9]+(?:[.,][0-9]+)*")
 def page_texts(doc_name: str) -> list[str]:
     """Text of every page, zero-indexed like the benchmark's evidence pages."""
     cache = CACHE_DIR / f"{doc_name}.json"
-    if cache.exists():
-        return json.loads(cache.read_text(encoding="utf-8"))
-    with pymupdf.open(pdf_path(doc_name)) as pdf:
-        texts = [page.get_text() for page in pdf]
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps(texts), encoding="utf-8")
-    return texts
+    with lock_for(f"pages:{doc_name}"):
+        if cache.exists():
+            return json.loads(cache.read_text(encoding="utf-8"))
+        with PDF_LOCK, pymupdf.open(pdf_path(doc_name)) as pdf:
+            texts = [page.get_text() for page in pdf]
+        atomic_write_text(cache, json.dumps(texts))
+        return texts
 
 
 def tokenize(text: str) -> list[str]:

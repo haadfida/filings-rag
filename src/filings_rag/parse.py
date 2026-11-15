@@ -111,12 +111,14 @@ def parse_page(page: pymupdf.Page) -> ParsedPage:
 
 
 def parse_document(doc_name: str) -> list[ParsedPage]:
+    from filings_rag.cachefile import PDF_LOCK, atomic_write_text, lock_for
+
     cache = CACHE_DIR / f"{doc_name}.json"
-    if cache.exists():
-        raw = json.loads(cache.read_text(encoding="utf-8"))
-        return [ParsedPage(p["page"], [Line(**ln) for ln in p["lines"]], p["units"]) for p in raw]
-    with pymupdf.open(pdf_path(doc_name)) as pdf:
-        pages = [parse_page(p) for p in pdf]
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps([asdict(p) for p in pages]), encoding="utf-8")
-    return pages
+    with lock_for(f"parse:{doc_name}"):
+        if cache.exists():
+            raw = json.loads(cache.read_text(encoding="utf-8"))
+            return [ParsedPage(p["page"], [Line(**ln) for ln in p["lines"]], p["units"]) for p in raw]
+        with PDF_LOCK, pymupdf.open(pdf_path(doc_name)) as pdf:  # PyMuPDF is not thread-safe
+            pages = [parse_page(p) for p in pdf]
+        atomic_write_text(cache, json.dumps([asdict(p) for p in pages]))
+        return pages

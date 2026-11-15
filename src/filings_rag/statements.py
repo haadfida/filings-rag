@@ -43,7 +43,7 @@ CUES = {
     "income_statement": re.compile(
         r"income statement|statement of income|statement of operations|p&l|profit and loss|revenue|net sales|"
         r"total sales|gross (?:profit|margin)|operating (?:income|margin|profit)|net income|net earnings|"
-        r"\bebit|cost of (?:goods|sales|revenue)|\bcogs\b|eps\b|earnings per share|interest expense|"
+        r"\bebit|cost of (?:goods|sales|revenue)|\bcogs\b|\beps\b|earnings per share|interest expense|"
         r"return on assets|\broa\b|margin|sg&a|effective tax rate",
         re.IGNORECASE,
     ),

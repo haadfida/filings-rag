@@ -17,6 +17,7 @@ import httpx
 import pymupdf
 
 from filings_rag.benchmark import DATA_DIR, DOCUMENTS_FILE, QUESTIONS_FILE, load_questions, pdf_path
+from filings_rag.cachefile import atomic_write_text
 
 REPO = "patronus-ai/financebench"
 COMMIT = "cc39aeb4afdf33909ee1412188bf89035950c2eb"  # HEAD on 2024-12-03, checked 2026-11-10
@@ -90,6 +91,10 @@ def download(data_dir: Path = DATA_DIR, pause: float = 0.5) -> Report:
     manifest: dict = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
     files: dict[str, str] = manifest.get("files", {})
 
+    def save_manifest() -> None:  # after every file, so an interrupted download keeps its progress
+        doc = {"source": f"https://github.com/{REPO}", "commit": COMMIT, "files": files}
+        atomic_write_text(manifest_path, json.dumps(doc, indent=2) + "\n")
+
     def get(rel: str) -> None:
         dest = data_dir / rel
         if dest.exists() and files.get(rel) == sha256(dest):
@@ -98,6 +103,7 @@ def download(data_dir: Path = DATA_DIR, pause: float = 0.5) -> Report:
         source = rel if rel.startswith(("pdfs/", "results/")) else f"data/{rel}"
         _fetch(client, f"{RAW}/{source}", dest)
         files[rel] = sha256(dest)
+        save_manifest()
         report.downloaded.append(rel)
         time.sleep(pause)
 
@@ -109,10 +115,7 @@ def download(data_dir: Path = DATA_DIR, pause: float = 0.5) -> Report:
         for doc in sorted({q.doc_name for q in load_questions(data_dir)}):
             get(f"pdfs/{doc}.pdf")
 
-    manifest_path.write_text(
-        json.dumps({"source": f"https://github.com/{REPO}", "commit": COMMIT, "files": files}, indent=2)
-        + "\n"
-    )
+    save_manifest()
     report.problems.extend(verify(data_dir))
     return report
 

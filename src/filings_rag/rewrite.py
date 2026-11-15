@@ -77,8 +77,8 @@ def rewrites(question: str, company: str, llm: LLM | None = None) -> list[str]:
         max_tokens=2000,
     )
     queries = [q.strip() for q in (res.data or {}).get("queries", []) if q.strip()][:N_QUERIES]
-    if not queries:  # refused or cut off: search with the question alone, and try again next time
-        return []
+    if not queries:  # refused or cut off: fail, so the answer is recorded as an error and retried
+        raise RuntimeError(f"rewrite returned no queries (stop_reason={res.stop_reason})")
     with _lock:
         _cache[key] = queries
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)

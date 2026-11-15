@@ -1,6 +1,8 @@
 # Filings RAG: design
 
-Status: plan only, nothing built. Facts below were checked on 10 Nov 2026; each says how.
+Status: this is the plan as written before building, on 10 Nov 2026; facts below say how each was checked.
+Milestones 0 to 5 are now done. What was built, and where it departed from this plan, is in the
+[README](README.md) and the [results](results/) write-ups; section 8 records the decisions made.
 
 ## 1. Goal
 
@@ -178,7 +180,8 @@ Sized for evenings; about three weeks.
 
 ## 7. Budget
 
-Estimates, to be replaced by measured cost after milestone 1. Assumes about 10,000 input and 1,500 output tokens per question.
+Measured: about $28 of model calls through milestone 5 (see each results page). The original estimates follow.
+Estimates, written before milestone 1. Assumes about 10,000 input and 1,500 output tokens per question.
 
 | Run | Estimated cost |
 | --- | --- |
@@ -189,19 +192,23 @@ Estimates, to be replaced by measured cost after milestone 1. Assumes about 10,0
 
 Ten full Opus runs would use the whole $100, so: iterate on the 50-question development set with Haiku or Sonnet, keep full Opus runs to about four, use Message Batches (half price) for full runs, and cache the system prompt. Parsing uses no model calls.
 
-## 8. Open questions
+## 8. Decisions
 
-Each has my recommendation first.
+How the open questions in the original plan were settled.
 
-1. **Vector store.** LanceDB (file-based, simplest) / Postgres with pgvector (more "production") / FAISS. Recommendation: LanceDB now, pgvector for the live demo.
-2. **Table chunking.** Whole statement as one chunk / one chunk per row with the header repeated. Recommendation: whole statement, then measure.
-3. **Citations.** The API's citations feature (page locations from the model, no structured output) / our own "cite the chunk id" instruction with structured output. Recommendation: try the API feature first; it is harder to fake.
-4. **Document setting.** Report "document given" only (matches the paper) / also "find the document". Recommendation: both; the second is harder and more realistic.
-5. **Agent step.** Single retrieve-then-answer / let the model issue follow-up searches. Recommendation: single pass first, agent as a measured upgrade.
-6. **Embedding model.** Small general model / finance-tuned model. Recommendation: start small and general; compare one alternative.
-7. **PSX source.** The PSX portal's terms forbid automated collection. Options: ask PSX for written permission / take reports from each company's own investor-relations site and keep a small corpus with links back and short quotes only / stay on US filings. Recommendation: company sites, 10 companies, and email PSX in parallel.
-8. **Repository name.** Decided so far: the project lives in `Documents/project/filings-rag`.
-9. **EDGAR contact.** The SEC asks every automated client to name a contact in its `User-Agent`. Recommendation: a dedicated project address.
+1. **Vector store.** None yet: 65,423 chunks fit in a NumPy matrix cached per filing. A vector database
+   is for the hosted demo.
+2. **Table chunking.** Each table is one chunk with its caption, units line and column years (milestone 2).
+3. **Citations.** The model cites `[p. N]` inside structured output, and grounding is checked against
+   the benchmark's evidence pages.
+4. **Document setting.** "Document given" is reported. Open search across all filings is built but not
+   yet reported.
+5. **Agent step.** Single retrieve-then-answer so far.
+6. **Embedding model.** A small general model (`BAAI/bge-small-en-v1.5`) run locally; statement routing
+   and query rewriting mattered more than the embedding (milestones 3 and 5).
+7. **PSX source.** Open. No automated collection from the PSX portal without written permission.
+8. **EDGAR contact.** The MCP server will send a dedicated project contact in its `User-Agent`, as the
+   SEC asks.
 
 ## 9. Risks
 

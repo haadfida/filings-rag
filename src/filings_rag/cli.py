@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
 
     re_ = sub.add_parser("retrieval-eval", help="evidence-page hit rates per retrieval method (no API calls)")
     re_.add_argument("--split", choices=("dev", "test", "all"), default="dev")
-    re_.add_argument("--methods", default="bm25,dense,hybrid,rerank,routed")
+    re_.add_argument("--methods", default="bm25,dense,hybrid,rerank,routed,routed_rewrite")
     re_.add_argument("--open", action="store_true", help="also search all filings at once")
     re_.set_defaults(func=cmd_retrieval_eval)
 

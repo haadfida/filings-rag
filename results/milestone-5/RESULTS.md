@@ -1,7 +1,9 @@
 # Milestone 5: raising retrieval recall
 
 Run on 15 Nov 2026. Retrieval changes were designed on the 50 dev questions; the 100 test questions were
-scored once at the end. Answers from `claude-opus-5-5` at effort `medium`, graded by `claude-opus-5-5` with
+scored once at the end. Reproduce with:
+- retrieval: `filings-rag retrieval-eval --split test --methods routed,routed_rewrite`
+- answers: `filings-rag run --mode routed_rewrite --split all` Answers from `claude-opus-5-5` at effort `medium`, graded by `claude-opus-5-5` with
 judge rubric v2, as in milestone 4. Cost: $3.93 for answering and grading, plus $0.0125 for query rewrites
 of all 150 questions.
 

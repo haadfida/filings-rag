@@ -3,6 +3,7 @@ name = "filings-rag"
 version = "0.1.0"
 description = "Question answering over company filings with page-level citations, measured on FinanceBench"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27",

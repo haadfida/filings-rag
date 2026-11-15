@@ -70,15 +70,25 @@ def evaluate(
     }
 
     for m in methods:
-        result["document_given"][f"{m}_chunks"] = _run(
-            questions, lambda q, m=m: doc_index(q.doc_name, dense).search(m, q.question, 10, qvecs.get(q.id))
-        )
+        if m == "routed_rewrite":  # milestone 5: needs the question's rewrites (one cached model call each)
+            from filings_rag.rewrite import rewrites
+
+            def search(q: Question) -> list[Hit]:
+                rw = rewrites(q.question, q.company)
+                return doc_index(q.doc_name).search_routed_rewrite(q.question, 10, rw, qvecs.get(q.id))
+
+        else:
+
+            def search(q: Question, m: str = m) -> list[Hit]:
+                return doc_index(q.doc_name, dense).search(m, q.question, 10, qvecs.get(q.id))
+
+        result["document_given"][f"{m}_chunks"] = _run(questions, search)
 
     if open_setting:
         docs = tuple(sorted({q.doc_name for q in load_questions()}))
         index = corpus_index(docs, dense)
         result["open"] = {"filings": len(docs), "chunks": len(index.chunks)}
-        for m in methods:
+        for m in (m for m in methods if not m.startswith("routed")):  # routing needs the named filing
             scores = _run(questions, lambda q, m=m: index.search(m, q.question, 10, qvecs.get(q.id)))
             right_doc = []
             for q in questions:

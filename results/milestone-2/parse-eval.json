@@ -1,0 +1,47 @@
+{
+  "plain": {
+    "evidence_recovery": {
+      "items": 189,
+      "recovered_90": 185,
+      "share": 0.979
+    },
+    "row_integrity": {
+      "labels": 92,
+      "label_on_page": 90,
+      "intact": 0,
+      "share_of_found": 0.0,
+      "examples_not_intact": [
+        "financebench_id_03029: Purchases of property, plant and equipment (PP&E)",
+        "financebench_id_04672: Property, plant and equipment -\u0080\u0094 net",
+        "financebench_id_02987: Total net revenues",
+        "financebench_id_02987: Property and equipment, net",
+        "financebench_id_07966: Capital expenditures",
+        "financebench_id_07966: Total net revenues",
+        "financebench_id_04735: Net cash provided by operating activities",
+        "financebench_id_04735: Total current liabilities",
+        "financebench_id_07507: Operating income",
+        "financebench_id_03856: Net cash provided by operating activities"
+      ]
+    }
+  },
+  "rows": {
+    "evidence_recovery": {
+      "items": 189,
+      "recovered_90": 181,
+      "share": 0.958
+    },
+    "row_integrity": {
+      "labels": 92,
+      "label_on_page": 90,
+      "intact": 90,
+      "share_of_found": 1.0,
+      "examples_not_intact": []
+    }
+  },
+  "parser_version": "rows-v2",
+  "chunks": {
+    "total": 65423,
+    "prose": 46393,
+    "table": 19030
+  }
+}

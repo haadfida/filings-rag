@@ -1,0 +1,54 @@
+{
+  "split": "test",
+  "questions": 100,
+  "document_given": {
+    "bm25_pages (milestone 1)": {
+      "hit@1": 0.16,
+      "hit@3": 0.23,
+      "hit@5": 0.28,
+      "hit@10": 0.36,
+      "mrr@10": 0.212,
+      "context_chars_top5": 21090
+    },
+    "bm25_chunks": {
+      "hit@1": 0.18,
+      "hit@3": 0.22,
+      "hit@5": 0.28,
+      "hit@10": 0.32,
+      "mrr@10": 0.214,
+      "context_chars_top5": 4479
+    },
+    "dense_chunks": {
+      "hit@1": 0.19,
+      "hit@3": 0.36,
+      "hit@5": 0.45,
+      "hit@10": 0.54,
+      "mrr@10": 0.291,
+      "context_chars_top5": 3336
+    },
+    "hybrid_chunks": {
+      "hit@1": 0.17,
+      "hit@3": 0.3,
+      "hit@5": 0.36,
+      "hit@10": 0.41,
+      "mrr@10": 0.244,
+      "context_chars_top5": 4220
+    },
+    "rerank_chunks": {
+      "hit@1": 0.23,
+      "hit@3": 0.37,
+      "hit@5": 0.42,
+      "hit@10": 0.5,
+      "mrr@10": 0.313,
+      "context_chars_top5": 4116
+    },
+    "routed_chunks": {
+      "hit@1": 0.52,
+      "hit@3": 0.68,
+      "hit@5": 0.73,
+      "hit@10": 0.75,
+      "mrr@10": 0.602,
+      "context_chars_top5": 4781
+    }
+  }
+}

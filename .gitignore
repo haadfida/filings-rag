@@ -1,0 +1,14 @@
+# Benchmark data is downloaded, never committed (CC BY-NC 4.0, see README)
+data/
+runs/
+
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+
+# Secrets
+.env
+.env.*

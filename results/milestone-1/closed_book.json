@@ -1,0 +1,81 @@
+{
+  "config": {
+    "mode": "closed_book",
+    "pipeline": "none",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_model": "claude-opus-5-5",
+    "judge_effort": "medium",
+    "judge_version": "v1"
+  },
+  "dev": {
+    "scores": {
+      "n": 50,
+      "ungraded": 0,
+      "correct": 0.82,
+      "grounded": 0.0,
+      "incorrect": 0.12,
+      "refusal": 0.06,
+      "cites_a_page": 0.0
+    },
+    "scores_clean_key": {
+      "n": 49,
+      "ungraded": 0,
+      "correct": 0.816,
+      "grounded": 0.0,
+      "incorrect": 0.122,
+      "refusal": 0.061,
+      "cites_a_page": 0.0
+    }
+  },
+  "test": {
+    "scores": {
+      "n": 100,
+      "ungraded": 0,
+      "correct": 0.7,
+      "grounded": 0.0,
+      "incorrect": 0.19,
+      "refusal": 0.11,
+      "cites_a_page": 0.0
+    },
+    "scores_clean_key": {
+      "n": 98,
+      "ungraded": 0,
+      "correct": 0.694,
+      "grounded": 0.0,
+      "incorrect": 0.194,
+      "refusal": 0.112,
+      "cites_a_page": 0.0
+    }
+  },
+  "all": {
+    "scores": {
+      "n": 150,
+      "ungraded": 0,
+      "correct": 0.74,
+      "grounded": 0.0,
+      "incorrect": 0.167,
+      "refusal": 0.093,
+      "cites_a_page": 0.0
+    },
+    "scores_clean_key": {
+      "n": 147,
+      "ungraded": 0,
+      "correct": 0.735,
+      "grounded": 0.0,
+      "incorrect": 0.17,
+      "refusal": 0.095,
+      "cites_a_page": 0.0
+    }
+  },
+  "cost_usd": {
+    "answers": 2.065,
+    "judge": 0.9529,
+    "per_question": 0.0201
+  },
+  "latency_s": {
+    "median": 6.17,
+    "max": 15.71
+  },
+  "errors": 0
+}

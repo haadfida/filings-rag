@@ -1,0 +1,43 @@
+[project]
+name = "filings-rag"
+version = "0.1.0"
+description = "Question answering over company filings with page-level citations, measured on FinanceBench"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "anthropic>=2.8",
+    "fastembed>=0.9",
+    "numpy>=2",
+    "pymupdf>=1.24",
+    "rank-bm25>=0.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+filings-rag = "filings_rag.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/filings_rag"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest_tmp"  # the system temp folder is not writable in every sandbox
+markers = ["data: needs the downloaded benchmark (run `filings-rag data` first)"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

@@ -17,7 +17,7 @@ ROWS = [  # label, note, results file
     ("Keyword search", "BM25, top 5 pages", "milestone-4/bm25-judge-v2.json"),
     ("Statement routing", "milestone 4", "milestone-4/routed.json"),
     ("filings-rag", "routing + query rewrites", "milestone-5/routed_rewrite.json"),
-    ("Evidence pages given", "ceiling", "milestone-1/oracle.json"),
+    ("Evidence pages given", "ceiling", "milestone-5/oracle-judge-v2.json"),
 ]
 HIGHLIGHT = "filings-rag"
 

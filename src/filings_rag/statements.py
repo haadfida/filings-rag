@@ -55,6 +55,8 @@ CUES = {
     ),
 }
 
+# Bump when statement finding or cues change; recorded in run configs.
+STATEMENTS_VERSION = "v2"
 HEAD_LINES = 8
 MIN_ROWS = 12
 # Look-alike statements: guarantor and parent-only schedules, segment and supplemental tables.

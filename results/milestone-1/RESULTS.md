@@ -34,6 +34,11 @@ The same sample was graded with two versions of the rubric.
 | --- | ---: | ---: | ---: |
 | v1 | 90% (135 of 150) | 0.85 | $0.90 |
 | **v2** | **94% (141 of 150)** | **0.91** | $0.92 |
+| v2, fresh sample (milestone 5) | 92% (138 of 150) | 0.88 | $0.94 |
+
+v2 was written after reading v1's disagreements on this same sample, so 94% is in-sample. On 150 other
+human-labelled answers (seed 11, excluding this sample) v2 agrees 92% of the time, kappa 0.88; that is the
+figure to quote. See `results/milestone-5/judge-validation-v2-fresh.json`.
 
 v1 graded non-answers (pasted filing text, a greeting, working that stops without a result) as refusals,
 where the paper's reviewers graded them incorrect. v2 grades them incorrect and keeps "refusal" for an
@@ -94,7 +99,7 @@ review list with the three known contradictory keys.
 ## Next steps
 
 1. Done: grounded accuracy is in every run summary, from saved answers and with no API calls.
-2. Done: judge rubric v2 (94% agreement, kappa 0.91).
+2. Done: judge rubric v2 (94% in-sample, 92% and kappa 0.88 on a fresh sample).
 3. **Check cited pages for the figure**, so citations to a page that repeats the evidence also count as
    grounded. Report both definitions.
 4. **Milestone 2:** table-aware parsing, measured by whether each evidence text is recoverable from its

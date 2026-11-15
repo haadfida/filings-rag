@@ -17,6 +17,24 @@ from filings_rag.benchmark import Question
 from filings_rag.llm import LLM, Result
 from filings_rag.pages import bm25_pages, page_texts
 
+
+def pipeline(mode: str) -> str:
+    """What produced the context for a mode, recorded in each run's config so a resumed run cannot mix
+    pipelines. Milestone 4's routed run used statements v1; a resume today would use v2 and be refused."""
+    from filings_rag.parse import PARSER_VERSION
+    from filings_rag.rewrite import REWRITE_VERSION
+    from filings_rag.statements import STATEMENTS_VERSION
+
+    chunks = f"{PARSER_VERSION}|statements-{STATEMENTS_VERSION}|k{ROUTED_K}"
+    return {
+        "closed_book": "none",
+        "oracle": "evidence-pages",
+        "bm25": f"bm25-pages|k{BM25_K}",
+        "routed": chunks,
+        "routed_rewrite": f"{chunks}|rewrite-{REWRITE_VERSION}",
+    }[mode]
+
+
 MODES = ("closed_book", "oracle", "bm25", "routed", "routed_rewrite")
 BM25_K = 5
 ROUTED_K = 5

@@ -1,10 +1,22 @@
 # Milestone 4: answering from routed retrieval
 
+**Corrections, 16 Nov 2026** (after an independent review; the numbers did not change):
+- The rubric change is not refusal-only. Re-grading the closed book's identical answers changed 4 of 150
+  labels, 3 of them involving "correct"; re-grading the oracle changed 1. That is about 1 point of judge
+  noise. The oracle was re-graded with v2 in milestone 5 (95% on test).
+- The failure review below read answers from all 150 questions, test included, and it shaped milestone 5.
+  Failure reviews now use dev only.
+- Differences between modes are now tested with paired McNemar tests (`filings-rag compare`); see
+  milestone 5.
+- Median input tokens are 2,538, not 2,545.
+- To reproduce these numbers, check out commit `b476900`: today `--mode routed` uses milestone 5's
+  corrected statement pages. Runs now record their retrieval pipeline and refuse to mix them.
+
 Run on 15 Nov 2026. Answers from `claude-opus-5-5` at effort `medium`, given the top 5 chunks of milestone 3's
 retrieval (statement routing, then re-ranking) within the named filing. Graded by `claude-opus-5-5` at
 effort `medium` with judge rubric v2. To keep the comparison fair, the closed-book and BM25 baselines were
 re-graded with rubric v2 on their saved milestone 1 answers. The oracle keeps its v1 grades: it has no
-refusals, which is the only label the rubric change affects.
+refusals (see the correction above: the rubric change also moved a few "correct" labels).
 
 Cost: $3.84 for the routed run and $1.92 to re-grade the two baselines. One run per question, so there is
 no variance estimate yet. Reproduce with `filings-rag run --mode routed --split all`.
@@ -20,7 +32,7 @@ no variance estimate yet. Reproduce with `filings-rag run --mode routed --split 
 | BM25, top 5 pages | 5 whole pages, by keyword search | 52% | 43% | 22% | 46.0% | 22.7% | 45% |
 | **Routed, top 5 chunks** | 5 chunks, statement-routed | **80%** | **69%** | **60%** | **72.7%** | **60.7%** | 17% |
 
-- **Context:** the routed mode sends the model a median of 2,545 input tokens, about a quarter of BM25's.
+- **Context:** the routed mode sends the model a median of 2,538 input tokens, about a quarter of BM25's.
 - **Cost:** $0.026 per question, answer plus grading.
 - **Latency:** median 4.4 s, 90th percentile 8.1 s.
 - **Clean key:** leaving out the three questions with contradictory reference answers gives 68.4% on test.

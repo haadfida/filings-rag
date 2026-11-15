@@ -2,18 +2,19 @@
 
 Question answering over company filings (10-Ks, 10-Qs, earnings releases) where every figure cites the
 page it came from. Measured on [FinanceBench](https://github.com/patronus-ai/financebench): 150 analyst
-questions over 84 real filings, with a held-out test set and a grader checked against human labels.
+questions over 84 real filings, with a fixed dev/test split and a grader checked against human labels.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/results-dark.svg">
-  <img alt="Test-set accuracy. Model's memory only: 70% correct, 0% grounded. Keyword search: 43% and 22%. Statement routing: 69% and 60%. filings-rag: 78% and 68%. Evidence pages given: 94% and 94%." src="docs/results-light.svg" width="760">
+  <img alt="Test-set accuracy. Model's memory only: 70% correct, 0% grounded. Keyword search: 43% and 22%. Statement routing: 69% and 60%. filings-rag: 78% and 68%. Evidence pages given: 95% and 95%." src="docs/results-light.svg" width="760">
 </picture>
 
-**On 100 held-out questions, 78% of answers are correct and 68% are correct *and* cite a page the
-benchmark marks as evidence.** Plain keyword search gets 43% and 22%. Claude answering from memory gets
-70%, but cites nothing, and that will not carry over to filings it has never seen.
+**On the 100 test questions, 78% of answers are correct and 68% are correct *and* cite a page the
+benchmark marks as evidence.** Plain keyword search gets 43% and 22% (paired test p < 0.001). Claude
+answering from memory gets 70% correct, a gap that is not statistically significant on 100 questions, but
+cites nothing: 0% grounded. Memory also will not carry over to filings the model has never seen.
 
-A real answer from the test run, unedited:
+A real answer from the evaluation run (a dev-split question), unedited:
 
 ```text
 Q: What is the FY2018 capital expenditure amount (in USD millions) for 3M? Give a response to the
@@ -53,11 +54,12 @@ question ──> route to statement ──┐     │
 
 ## How it is measured
 
-- **A fixed split.** 50 dev questions for building and tuning, 100 test questions scored once at the end
-  of each milestone. Stratified by question type, and fixed by hash, so it never moves.
+- **A fixed split.** 50 dev questions for building and tuning, 100 test questions. Stratified by question
+  type, and fixed by hash, so it never moves. The test set is not pristine; see Limits.
 - **A grader checked against people.** An LLM judge labels each answer correct, incorrect or refusal.
-  On 150 of the paper's human-labelled answers it agrees with the human label 94% of the time
-  (Cohen's kappa 0.91).
+  On 150 of the paper's human-labelled answers it had not seen during rubric design, it agrees with the
+  human label 92% of the time (Cohen's kappa 0.88). Re-grading identical answers flips about 1 label in
+  100, so differences of a point or two are judge noise.
 - **Grounded accuracy.** Correct *and* citing an evidence page. This is the number that separates
   retrieval from memory.
 - **Baselines.** Memory only (no documents), keyword search over whole pages, and the evidence pages
@@ -73,7 +75,15 @@ question ──> route to statement ──┐     │
 | Keyword search, top 5 pages | 43% | 22% | 28% | $0.045 |
 | Statement routing (milestone 4) | 69% | 60% | 73% | $0.026 |
 | **filings-rag (milestone 5)** | **78%** | **68%** | **89%** | **$0.026** |
-| Evidence pages given (ceiling) | 94% | 94% | 100% | $0.021 |
+| Evidence pages given (ceiling) | 95% | 95% | 100% | $0.021 |
+
+Paired McNemar tests on the same 100 questions (`filings-rag compare`), filings-rag against each row:
+
+| Against | Correct: only filings-rag right / only the other right | p | Grounded: p |
+| --- | ---: | ---: | ---: |
+| Model's memory only | 17 / 9 | 0.17 | < 0.001 |
+| Keyword search | 41 / 6 | < 0.001 | < 0.001 |
+| Statement routing (milestone 4) | 14 / 5 | 0.064 | 0.13 |
 
 Cost includes grading. Each milestone's write-up has dev and test scores, failure reviews and what did not
 work:
@@ -98,13 +108,18 @@ work:
 
 ### Limits
 
-- **One run per configuration.** No variance estimate yet, so differences of a few points are noise. The
-  gains above are well beyond that.
+- **One run per configuration, 100 test questions.** The gains over keyword search and the grounding gap
+  over memory are significant; the correctness gains over memory and over milestone 4 are not yet (p 0.17
+  and 0.064). Repeat runs are the next step.
+- **The test set informed some decisions.** It was scored at milestones 1, 3, 4 and 5, and milestone 4's
+  failure review read test answers, which shaped milestone 5. 43 of the 100 test questions share a filing
+  with a dev question. No leak benefit is visible: evidence-page recall is 35 of 43 on those and 54 of 57
+  on the rest. Failure reviews now use dev only, and a fresh evaluation set would settle it.
 - **The filing is given,** as in the FinanceBench paper. Search across all 84 filings at once is built but
   not yet reported.
 - **Grounding is a lower bound.** The benchmark marks one page per fact; filings repeat figures, so a
   correct citation to another page counts as ungrounded.
-- **Reading is now the bottleneck.** When the evidence is retrieved, 80% of answers are right, against 94%
+- **Reading is now the bottleneck.** When the evidence is retrieved, 80% of answers are right, against 95%
   when the model sees only the evidence pages. Most misses are definition choices (which quick-ratio
   formula), incomplete lists, or a committed wrong headline.
 
@@ -123,10 +138,11 @@ python -m pytest
 
 ```bash
 python scripts/embed_all.py               # embeds 65k chunks on CPU, about an hour, once
-filings-rag retrieval-eval --split test --methods routed,routed_rewrite          # free, plus $0.01 of rewrites
+filings-rag retrieval-eval --split test --methods routed,routed_rewrite          # free: rewrites ship with the code
 export ANTHROPIC_API_KEY=...
 filings-rag run --mode routed_rewrite --split all                                 # about $4
-filings-rag validate-judge --n 150                                                # about $1
+filings-rag validate-judge --seed 11 --exclude-seed 7                            # about $1, out of sample
+filings-rag compare routed_rewrite_claude-opus-5-5_medium_all closed_book_claude-opus-5-5_medium_all  # free
 python scripts/make_chart.py              # redraws the chart from results/
 ```
 

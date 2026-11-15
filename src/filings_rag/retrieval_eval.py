@@ -1,4 +1,5 @@
-"""Measure retrieval against the benchmark's evidence pages. No model calls.
+"""Measure retrieval against the benchmark's evidence pages. No model calls, except that `routed_rewrite`
+rewrites any question missing from the shipped rewrite cache (one Claude Haiku call each).
 
 For each question, a method returns ranked chunks. A question is a hit at k when any of the top k chunks
 comes from a page the benchmark marks as evidence. Reported for k = 1, 3, 5 and 10, with mean reciprocal

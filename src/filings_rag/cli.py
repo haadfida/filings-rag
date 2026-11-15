@@ -53,7 +53,9 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_validate_judge(args: argparse.Namespace) -> int:
     from filings_rag import runner
 
-    print(json.dumps(runner.validate_judge(args.n, args.model, args.effort, args.workers), indent=2))
+    a = args
+    result = runner.validate_judge(a.n, a.model, a.effort, a.workers, a.seed, a.exclude_seed)
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -64,6 +66,13 @@ def cmd_report(args: argparse.Namespace) -> int:
     for name in names:
         s = runner.resummarise(name)
         print(f"{name}: {json.dumps(s['all']['scores'])}")
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    from filings_rag import runner
+
+    print(json.dumps(runner.compare(args.a, args.b, args.split), indent=2))
     return 0
 
 
@@ -114,9 +123,12 @@ def main(argv: list[str] | None = None) -> int:
         func=cmd_parse_eval
     )
 
-    re_ = sub.add_parser("retrieval-eval", help="evidence-page hit rates per retrieval method (no API calls)")
+    re_ = sub.add_parser(
+        "retrieval-eval",
+        help="evidence-page hit rates per retrieval method (no API calls; uses saved query rewrites)",
+    )
     re_.add_argument("--split", choices=("dev", "test", "all"), default="dev")
-    re_.add_argument("--methods", default="bm25,dense,hybrid,rerank,routed,routed_rewrite")
+    re_.add_argument("--methods", default="bm25,dense,hybrid,rerank,routed")
     re_.add_argument("--open", action="store_true", help="also search all filings at once")
     re_.set_defaults(func=cmd_retrieval_eval)
 
@@ -124,11 +136,19 @@ def main(argv: list[str] | None = None) -> int:
     rep.add_argument("names", nargs="*", help="run names under runs/ (default: all)")
     rep.set_defaults(func=cmd_report)
 
+    cmp_ = sub.add_parser("compare", help="paired comparison of two runs with McNemar's test (no API calls)")
+    cmp_.add_argument("a", help="run name under runs/")
+    cmp_.add_argument("b", help="run name under runs/")
+    cmp_.add_argument("--split", choices=("dev", "test", "all"), default="test")
+    cmp_.set_defaults(func=cmd_compare)
+
     v = sub.add_parser("validate-judge", help="grade human-labelled answers and measure agreement")
     v.add_argument("--n", type=int, default=150, help="sample size, balanced across the three labels")
     v.add_argument("--model", choices=sorted(PRICES), default=DEFAULT_MODEL)
     v.add_argument("--effort", choices=EFFORTS, default="medium")
     v.add_argument("--workers", type=int, default=4)
+    v.add_argument("--seed", type=int, default=7)
+    v.add_argument("--exclude-seed", type=int, help="leave out answers drawn with this seed")
     v.set_defaults(func=cmd_validate_judge)
 
     args = parser.parse_args(argv)

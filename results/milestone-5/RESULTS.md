@@ -1,5 +1,15 @@
 # Milestone 5: raising retrieval recall
 
+**Corrections, 16 Nov 2026** (after an independent review; the numbers did not change):
+- "Retrieval now beats memory" overstated it: 78% against 70% correct is not significant on 100
+  questions (paired McNemar p = 0.17). Grounded accuracy, 68% against 0%, is.
+- The gain over milestone 4 (69% to 78% correct) has p = 0.064, suggestive rather than established;
+  retrieval recall rose from 73% to 89% on test.
+- The oracle is now graded with rubric v2: 95% on test (was 94% under v1).
+- The judge's out-of-sample agreement is 92% (kappa 0.88), not the in-sample 94%.
+- Median input tokens are 2,723, not 2,728.
+- See "Test set" under Limits for how the test set was used.
+
 Run on 15 Nov 2026. Retrieval changes were designed on the 50 dev questions; the 100 test questions were
 scored once at the end. Reproduce with:
 - retrieval: `filings-rag retrieval-eval --split test --methods routed,routed_rewrite`
@@ -45,19 +55,26 @@ Test matches dev (89% against 88%), so the tuning did not overfit the dev set.
 
 | Mode | Dev | **Test** | Test grounded | All (150) | All grounded | Refusals (all) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Oracle (ceiling) | 98% | 94% | 94% | 95.3% | 95.3% | 0% |
+| Oracle (ceiling), rubric v2 | 98% | 95% | 95% | 96.0% | 96.0% | 0% |
 | Closed book | 80% | 70% | 0% | 73.3% | 0% | 10% |
 | BM25, top 5 pages | 52% | 43% | 22% | 46.0% | 22.7% | 45% |
 | Milestone 4: routed | 80% | 69% | 60% | 72.7% | 60.7% | 17% |
 | **Milestone 5: routed + rewrites** | **86%** | **78%** | **68%** | **80.7%** | **69.3%** | 8% |
 
 - **Clean key:** leaving out the three contradictory reference answers gives 77.6% on test.
-- **Context:** median 2,728 input tokens per question.
+- **Context:** median 2,723 input tokens per question.
 - **Cost:** $0.026 per question, answer plus grading.
 - **Latency:** median 4.7 s.
 
-**Retrieval now beats memory.** Test correctness is 78% against the closed book's 70%. Over all 150, 22
-questions are right only with retrieval and 11 only from memory (milestone 4: 22 and 23).
+**Retrieval closes the gap with memory, and adds grounding.** Test correctness is 78% against the closed
+book's 70%; on the test set 17 questions are right only with retrieval and 9 only from memory, which is not
+significant (paired McNemar p = 0.17). Grounded accuracy is 68% against 0% (p < 0.001).
+
+| Test, paired (`filings-rag compare`) | Correct: only M5 / only other | p | Grounded: p |
+| --- | ---: | ---: | ---: |
+| M5 vs closed book | 17 / 9 | 0.17 | < 0.001 |
+| M5 vs BM25 | 41 / 6 | < 0.001 | < 0.001 |
+| M5 vs milestone 4 | 14 / 5 | 0.064 | 0.13 |
 
 **Reading is now the bottleneck, not retrieval.** On test:
 
@@ -66,7 +83,7 @@ questions are right only with retrieval and 11 only from memory (milestone 4: 22
 | Evidence page retrieved (89) | 71 (80%) | 11 | 7 |
 | Evidence page not retrieved (11) | 7 | 2 | 2 |
 
-The oracle reaches 94% from the evidence pages alone, so the 14-point gap on retrieved questions comes
+The oracle reaches 95% from the evidence pages alone, so the 15-point gap on retrieved questions comes
 from the extra chunks distracting the model, from a table chunk holding only part of a page, or from
 reasoning and definition choices.
 
@@ -83,8 +100,13 @@ All 17 incorrect answers (across all 150) were read. Roughly:
 
 ## Limits
 
-- **One run each, no variance.** On 100 questions a few points is within noise; the gains here (69% to
-  78% correct, 73% to 89% hit@5) are larger than that, but a repeat run would firm them up.
+- **One run each, no variance.** The recall gain (73% to 89% hit@5) and the gains over BM25 are clear; the
+  correctness gain over milestone 4 (p = 0.064) and over the closed book (p = 0.17) need repeat runs.
+- **Test set.** It was scored at milestones 1, 3, 4 and 5, and milestone 4's failure review, which read
+  test answers, set this milestone's direction. 43 of the 100 test questions share a filing with a dev
+  question, and the router was checked per filing. No leak benefit is visible: evidence-page recall is 35
+  of 43 (81%) on shared filings and 54 of 57 (95%) on the rest, and correctness is 34 of 43 and 44 of 57.
+  A fresh evaluation set would settle it.
 - **Grounding is a lower bound,** and citing an evidence page does not prove the figure came from it (the
   cited-page figure check is still open).
 - **The filing is given.** Open search across all 84 filings is not yet measured.

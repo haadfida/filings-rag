@@ -73,6 +73,7 @@ def run(
     llm = LLM()
     config = {
         "mode": mode,
+        "pipeline": answer_mod.pipeline(mode),
         "model": model,
         "effort": effort,
         "judge_model": judge_model,
@@ -130,8 +131,9 @@ def run(
             res = judge_mod.grade(llm, by_id[qid], a["answer"], judge_model, judge_effort)
         except Exception as e:
             return {"key": qid, "error": f"{type(e).__name__}: {e}"}
-        data = res.data or {"label": None, "reason": f"judge stop_reason={res.stop_reason}"}
-        return {"key": qid, "label": data["label"], "reason": data["reason"], "cost": res.cost}
+        if not res.data:  # no label: an error row, so the next run of this name retries it
+            return {"key": qid, "error": f"judge returned no label (stop_reason={res.stop_reason})"}
+        return {"key": qid, "label": res.data["label"], "reason": res.data["reason"], "cost": res.cost}
 
     to_grade = [
         qid
@@ -150,6 +152,7 @@ def _scores(qs: list[Question], answers: dict[str, dict], grades: dict[str, dict
     """Shares of correct, incorrect and refused answers, plus citation-based measures.
 
     grounded: correct and cites at least one evidence page. cites_a_page: cites any page at all.
+    ungraded: questions with no label yet; shares are over graded questions only, so it should be 0.
     """
     graded = [q for q in qs if q.id in grades and grades[q.id].get("label")]
     n = len(graded)
@@ -164,6 +167,7 @@ def _scores(qs: list[Question], answers: dict[str, dict], grades: dict[str, dict
 
     return {
         "n": n,
+        "ungraded": len(qs) - n,
         "correct": share(c["correct"]),
         "grounded": share(grounded),
         "incorrect": share(c["incorrect"]),
@@ -204,17 +208,24 @@ def summarise(questions: list[Question], answers: dict, grades: dict, config: di
     return summary
 
 
-def validate_judge(n: int, model: str, effort: str, workers: int = 4, seed: int = 7) -> dict:
-    """Grade a balanced sample of the paper's human-labelled answers and measure agreement."""
+def validate_judge(
+    n: int, model: str, effort: str, workers: int = 4, seed: int = 7, exclude_seed: int | None = None
+) -> dict:
+    """Grade a balanced sample of the paper's human-labelled answers and measure agreement.
+
+    exclude_seed: leave out the answers that seed's sample drew, for an out-of-sample check of a rubric
+    that was revised after reading its disagreements on that sample.
+    """
     qs = {q.id: q for q in load_questions()}
     pool = [a for a in load_labelled_answers() if a.question_id in qs and a.model_answer.strip()]
-    rng = random.Random(seed)
-    sample = []
-    for label in judge_mod.LABELS:
-        group = [a for a in pool if a.label == label]
-        sample += rng.sample(group, min(len(group), n // 3))
+    if exclude_seed is not None:
+        seen = {(a.source, a.question_id) for a in _judge_sample(pool, n, exclude_seed)}
+        pool = [a for a in pool if (a.source, a.question_id) not in seen]
+    sample = _judge_sample(pool, n, seed)
 
     name = f"judge-validation_{judge_mod.JUDGE_VERSION}_{model}_{effort}_n{n}_seed{seed}"
+    if exclude_seed is not None:
+        name += f"_excl{exclude_seed}"
     out = RUNS_DIR / name / "grades.jsonl"
     graded = _read(out)
     llm = LLM()
@@ -227,7 +238,9 @@ def validate_judge(n: int, model: str, effort: str, workers: int = 4, seed: int 
             res = judge_mod.grade(llm, qs[a.question_id], a.model_answer, model, effort)
         except Exception as e:
             return {"key": key(a), "error": f"{type(e).__name__}: {e}"}
-        data = res.data or {"label": None, "reason": f"stop_reason={res.stop_reason}"}
+        if not res.data:
+            return {"key": key(a), "error": f"judge returned no label (stop_reason={res.stop_reason})"}
+        data = res.data
         return {
             "key": key(a),
             "human": a.label,
@@ -254,6 +267,16 @@ def validate_judge(n: int, model: str, effort: str, workers: int = 4, seed: int 
     return result
 
 
+def _judge_sample(pool: list, n: int, seed: int) -> list:
+    """n // 3 answers per human label, drawn with a fixed seed."""
+    rng = random.Random(seed)
+    sample = []
+    for label in judge_mod.LABELS:
+        group = [a for a in pool if a.label == label]
+        sample += rng.sample(group, min(len(group), n // 3))
+    return sample
+
+
 def _kappa(rows: list[dict]) -> float | None:
     n = len(rows)
     if not n:
@@ -274,3 +297,45 @@ def resummarise(name: str) -> dict:
     summary = summarise(questions, answers, _read(run_dir / "grades.jsonl"), config)
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
+
+
+def mcnemar_p(only_a: int, only_b: int) -> float:
+    """Exact two-sided McNemar test: the chance of a split at least this uneven if the two runs were
+    equally good, given how many questions they disagree on."""
+    from math import comb
+
+    n = only_a + only_b
+    if n == 0:
+        return 1.0
+    tail = sum(comb(n, j) for j in range(min(only_a, only_b) + 1)) / 2**n
+    return min(1.0, 2 * tail)
+
+
+def compare(name_a: str, name_b: str, split: str = "test") -> dict:
+    """Paired comparison of two runs on the same questions, for correct and for grounded answers."""
+    qs = {q.id: q for q in load_questions() if split == "all" or split_of(q) == split}
+    runs = []
+    for name in (name_a, name_b):
+        answers, grades = _read(RUNS_DIR / name / "answers.jsonl"), _read(RUNS_DIR / name / "grades.jsonl")
+        runs.append((answers, grades))
+    common = [i for i in qs if all(i in g and g[i].get("label") for _, g in runs)]
+
+    def outcome(run, qid: str, measure: str) -> bool:
+        answers, grades = run
+        ok = grades[qid]["label"] == "correct"
+        return ok and cites_evidence(qs[qid], answers[qid].get("answer")) if measure == "grounded" else ok
+
+    out: dict = {"a": name_a, "b": name_b, "split": split, "questions": len(common)}
+    for measure in ("correct", "grounded"):
+        a = [outcome(runs[0], i, measure) for i in common]
+        b = [outcome(runs[1], i, measure) for i in common]
+        only_a = sum(x and not y for x, y in zip(a, b, strict=True))
+        only_b = sum(y and not x for x, y in zip(a, b, strict=True))
+        out[measure] = {
+            "a": round(sum(a) / len(common), 3) if common else None,
+            "b": round(sum(b) / len(common), 3) if common else None,
+            "only_a": only_a,
+            "only_b": only_b,
+            "p_mcnemar": round(mcnemar_p(only_a, only_b), 4),
+        }
+    return out

@@ -3,6 +3,10 @@
 Questions say "capex" or "did they retain card members"; filings say "Purchases of property, plant and
 equipment" or "card member retention". A small model writes a few such searches, and each is run through
 retrieval alongside the original question. Rewrites are cached on disk, so a question is rewritten once.
+
+The rewrites used for the published results ship with the package (`rewrites-v1.jsonl`, hashed keys and
+queries only), so the retrieval numbers reproduce from a fresh clone without an API key. Change the model
+or the prompt and PROMPT_FINGERPRINT changes; a test then fails until REWRITE_VERSION is bumped.
 """
 
 from __future__ import annotations
@@ -10,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from pathlib import Path
 
 from filings_rag.benchmark import DATA_DIR
 from filings_rag.llm import LLM
@@ -17,6 +22,7 @@ from filings_rag.llm import LLM
 REWRITE_MODEL = "claude-haiku-5-5"
 REWRITE_VERSION = "v1"
 CACHE_FILE = DATA_DIR.parent / "cache" / f"rewrites-{REWRITE_VERSION}.jsonl"
+SHIPPED_FILE = Path(__file__).with_name(f"rewrites-{REWRITE_VERSION}.jsonl")
 N_QUERIES = 3
 
 SYSTEM = f"""You help search a company's SEC filing (10-K, 10-Q, 8-K or earnings release).
@@ -24,6 +30,8 @@ SYSTEM = f"""You help search a company's SEC filing (10-K, 10-Q, 8-K or earnings
 Given an analyst's question, write {N_QUERIES} short search queries in the wording the filing itself would \
 use: exact financial statement line items, note or section titles, and the phrases management uses in \
 MD&A. Do not answer the question. Each query is one line of at most 12 words."""
+
+PROMPT_FINGERPRINT = hashlib.sha256(f"{REWRITE_MODEL}|{SYSTEM}".encode()).hexdigest()[:12]
 
 SCHEMA = {
     "type": "object",
@@ -44,11 +52,13 @@ def _load() -> dict[str, list[str]]:
     global _cache
     if _cache is None:
         _cache = {}
-        if CACHE_FILE.exists():
-            for line in CACHE_FILE.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    row = json.loads(line)
-                    _cache[row["key"]] = row["queries"]
+        for path in (SHIPPED_FILE, CACHE_FILE):
+            if path.exists():
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    if line.strip():
+                        row = json.loads(line)
+                        if row["queries"]:
+                            _cache[row["key"]] = row["queries"]
     return _cache
 
 
@@ -67,6 +77,8 @@ def rewrites(question: str, company: str, llm: LLM | None = None) -> list[str]:
         max_tokens=2000,
     )
     queries = [q.strip() for q in (res.data or {}).get("queries", []) if q.strip()][:N_QUERIES]
+    if not queries:  # refused or cut off: search with the question alone, and try again next time
+        return []
     with _lock:
         _cache[key] = queries
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)

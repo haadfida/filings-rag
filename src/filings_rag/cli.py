@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from filings_rag import data
+from filings_rag.answer import MODES as answer_modes
 from filings_rag.benchmark import CONTRADICTORY_KEYS, load_documents, load_questions, split_of
 from filings_rag.llm import DEFAULT_MODEL, PRICES, load_dotenv
 
@@ -97,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("stats", help="summarise the downloaded benchmark").set_defaults(func=cmd_stats)
 
     r = sub.add_parser("run", help="answer and grade questions with a baseline (calls the API)")
-    r.add_argument("--mode", choices=("closed_book", "oracle", "bm25", "routed"), required=True)
+    r.add_argument("--mode", choices=answer_modes, required=True)
     r.add_argument("--model", choices=sorted(PRICES), default=DEFAULT_MODEL)
     r.add_argument("--effort", choices=EFFORTS, default="medium")
     r.add_argument("--judge-model", choices=sorted(PRICES), default=DEFAULT_MODEL)

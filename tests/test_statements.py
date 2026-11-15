@@ -17,3 +17,24 @@ def test_titles():
     assert TITLES["income_statement"].search("CONSOLIDATED STATEMENTS OF OPERATIONS")
     assert TITLES["cash_flow"].search("Consolidated Statement of Cash Flows")
     assert not TITLES["cash_flow"].search("Operating cash flow was strong")
+
+
+def test_ppne_cue():
+    assert statements_for("Did Pfizer grow its PPNE between FY20 and FY21?") == ["balance_sheet"]
+
+
+def test_choose_prefers_earliest_tight_cluster():
+    from filings_rag.statements import _choose
+
+    cands = {
+        "balance_sheet": [(56, 30), (94, 34), (173, 40)],  # real, guarantor note, subsidiary exhibit
+        "income_statement": [(57, 25), (174, 30)],
+        "cash_flow": [(59, 40), (175, 45)],
+    }
+    assert _choose(cands) == {"balance_sheet": 56, "income_statement": 57, "cash_flow": 59}
+    assert _choose({"balance_sheet": [], "income_statement": [], "cash_flow": []}) == {}
+    # With no tight cluster, the tightest combination wins.
+    assert _choose({"balance_sheet": [(10, 20), (60, 20)], "cash_flow": [(50, 20)]}) == {
+        "balance_sheet": 60,
+        "cash_flow": 50,
+    }

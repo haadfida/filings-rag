@@ -1,10 +1,12 @@
-"""Answer a benchmark question in one of three baseline modes.
+"""Answer a benchmark question in one of several modes.
 
 - closed_book: the question alone. Measures what the model knows or guesses without documents.
 - oracle: the full text of the evidence page(s) the benchmark marks. The ceiling for retrieval work.
 - bm25: the top 5 pages of the named filing by plain BM25. The simplest retrieval baseline.
 - routed: the top 5 chunks of the named filing from milestone 3's retrieval (statement routing, then
-  re-ranking). The system under test.
+  re-ranking).
+- routed_rewrite: milestone 5. Routing, then searches for the question and three rewrites of it in the
+  filing's wording, fused; one chunk per page past the routed ones. The system under test.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from filings_rag.benchmark import Question
 from filings_rag.llm import LLM, Result
 from filings_rag.pages import bm25_pages, page_texts
 
-MODES = ("closed_book", "oracle", "bm25", "routed")
+MODES = ("closed_book", "oracle", "bm25", "routed", "routed_rewrite")
 BM25_K = 5
 ROUTED_K = 5
 
@@ -63,6 +65,14 @@ def build_context(q: Question, mode: str) -> Context:
         from filings_rag.retrieve import doc_index
 
         hits = doc_index(q.doc_name).search("routed", q.question, ROUTED_K)
+        pages = list(dict.fromkeys((h.chunk.doc_name, h.chunk.page) for h in hits))
+        blocks = [f"[{h.chunk.doc_name}, p. {h.chunk.page + 1}]\n{h.chunk.text}" for h in hits]
+    elif mode == "routed_rewrite":
+        from filings_rag.retrieve import doc_index
+        from filings_rag.rewrite import rewrites
+
+        rw = rewrites(q.question, q.company)
+        hits = doc_index(q.doc_name).search_routed_rewrite(q.question, ROUTED_K, rw)
         pages = list(dict.fromkeys((h.chunk.doc_name, h.chunk.page) for h in hits))
         blocks = [f"[{h.chunk.doc_name}, p. {h.chunk.page + 1}]\n{h.chunk.text}" for h in hits]
     else:

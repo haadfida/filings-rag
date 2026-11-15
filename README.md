@@ -3,7 +3,7 @@
 Question answering over company filings, with a page citation for every figure. Measured on the
 FinanceBench open set; the design and the reasoning behind it are in [DESIGN.md](DESIGN.md).
 
-Status: milestone 4 done (answering). Results: [milestone 1](results/milestone-1/RESULTS.md), [milestone 2](results/milestone-2/RESULTS.md), [milestone 3](results/milestone-3/RESULTS.md), [milestone 4](results/milestone-4/RESULTS.md).
+Status: milestone 5 done (retrieval recall). Results: [milestone 1](results/milestone-1/RESULTS.md), [milestone 2](results/milestone-2/RESULTS.md), [milestone 3](results/milestone-3/RESULTS.md), [milestone 4](results/milestone-4/RESULTS.md), [milestone 5](results/milestone-5/RESULTS.md).
 
 ## Setup
 

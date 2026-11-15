@@ -34,7 +34,9 @@ Reproduce with `filings-rag retrieval-eval --split test`.
   ("quick ratio" means the balance sheet; "capital expenditure" means cash flows). It finds those
   statement pages in the filing by their titles, keeping the titled page with the most table rows, and
   puts their table chunks first.
-- **Coverage.** All three statements were found in all 64 annual reports.
+- **Coverage.** A page titled as each statement was found in all 64 annual reports. *Correction
+  (milestone 5): many of those pages were look-alikes, not the primary statement; see
+  [milestone 5](../milestone-5/RESULTS.md).*
 - **Held up out of sample.** The cue lists were written with the dev misses in view, but the test score
   (73%) matches dev (74%).
 

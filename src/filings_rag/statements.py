@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from functools import cache
+from itertools import product
 
 from filings_rag.parse import parse_document
 
@@ -36,7 +37,7 @@ CUES = {
         r"balance sheet|financial position|total assets|current assets|current liabilit|working capital|"
         r"quick ratio|current ratio|inventor|receivable|payable|shareholders'? equity|stockholders'? equity|"
         r"total debt|long-term debt|pp&e|property, plant|return on assets|\broa\b|liquidity|"
-        r"debt[- ]to[- ]equity|book value|cash and cash equivalents",
+        r"debt[- ]to[- ]equity|book value|cash and cash equivalents|\bppn?e\b",
         re.IGNORECASE,
     ),
     "income_statement": re.compile(
@@ -56,6 +57,14 @@ CUES = {
 
 HEAD_LINES = 8
 MIN_ROWS = 12
+# Look-alike statements: guarantor and parent-only schedules, segment and supplemental tables.
+NOT_PRIMARY = re.compile(
+    r"consolidating|guarantor|parent company|registrant|segment|supplemental|selected|summary|"
+    r"\(continued\)|pro forma",
+    re.IGNORECASE,
+)
+TITLE_LINE_CHARS = 80
+CLUSTER_PAGES = 8
 
 
 def statements_for(question: str) -> list[str]:
@@ -63,27 +72,66 @@ def statements_for(question: str) -> list[str]:
     return [name for name, cue in CUES.items() if cue.search(question)]
 
 
+def _rows(page) -> int:
+    return sum(line.is_row for line in page.lines)
+
+
+def _candidates(pages, title: re.Pattern, strict: bool) -> list[tuple[int, int]]:
+    """(page, rows) of pages titled as this statement and mostly table rows.
+
+    strict: the title is a short line of its own and the page is not a look-alike (see NOT_PRIMARY).
+    """
+    out = []
+    for p in pages:
+        head_lines = [line.text for line in p.lines[:HEAD_LINES]]
+        head = " ".join(head_lines)
+        if strict:
+            titled = any(len(t) <= TITLE_LINE_CHARS and title.search(t) for t in head_lines)
+            if not titled or NOT_PRIMARY.search(head):
+                continue
+            if sum(bool(t.search(head)) for t in TITLES.values()) > 1:  # an index of the statements
+                continue
+        elif not title.search(head) or re.search(r"\(continued\)", head, re.IGNORECASE):
+            continue
+        rows = _rows(p)
+        if rows >= MIN_ROWS:
+            out.append((p.page, rows))
+    return out
+
+
+def _choose(cands: dict[str, list[tuple[int, int]]]) -> dict[str, int]:
+    """One page per statement. The primary statements sit together at the start of the financial statements
+    section, so pick the earliest combination spanning at most CLUSTER_PAGES pages (later clusters are
+    usually a subsidiary's statements filed as an exhibit). Without one, take the tightest combination."""
+    names = [n for n in cands if cands[n]]
+    if not names:
+        return {}
+    best, best_key = {}, None
+    for combo in product(*(cands[n] for n in names)):
+        span = max(p for p, _ in combo) - min(p for p, _ in combo)
+        key = (0, min(p for p, _ in combo), span) if span <= CLUSTER_PAGES else (1, span, 0)
+        if best_key is None or key < best_key:
+            best, best_key = {n: p for n, (p, _) in zip(names, combo, strict=True)}, key
+    return best
+
+
 @cache
 def statement_pages(doc_name: str) -> dict[str, list[int]]:
-    """Zero-indexed pages of each primary statement: the best titled page and, if it continues, the next."""
+    """Zero-indexed pages of each primary statement: the chosen titled page and, if it continues, the next."""
     pages = parse_document(doc_name)
+    cands = {name: _candidates(pages, title, strict=True) for name, title in TITLES.items()}
+    for name, title in TITLES.items():  # fall back to the loose rule when no page passes the strict one
+        if not cands[name]:
+            loose = _candidates(pages, title, strict=False)
+            cands[name] = [max(loose, key=lambda c: c[1])] if loose else []
     found: dict[str, list[int]] = {}
-    for name, title in TITLES.items():
-        best, best_rows = None, MIN_ROWS - 1
-        for p in pages:
-            head = " ".join(line.text for line in p.lines[:HEAD_LINES])
-            if not title.search(head) or re.search(r"\(continued\)", head, re.IGNORECASE):
-                continue
-            rows = sum(line.is_row for line in p.lines)
-            if rows > best_rows:
-                best, best_rows = p.page, rows
-        if best is not None:
-            chosen = [best]
-            nxt = best + 1
-            if nxt < len(pages):
-                head = " ".join(line.text for line in pages[nxt].lines[:HEAD_LINES])
-                other_title = any(t.search(head) for n, t in TITLES.items() if n != name)
-                if not other_title and sum(line.is_row for line in pages[nxt].lines) >= MIN_ROWS:
-                    chosen.append(nxt)
-            found[name] = chosen
+    for name, best in _choose(cands).items():
+        chosen = [best]
+        nxt = best + 1
+        if nxt < len(pages):
+            head = " ".join(line.text for line in pages[nxt].lines[:HEAD_LINES])
+            other_title = any(t.search(head) for n, t in TITLES.items() if n != name)
+            if not other_title and _rows(pages[nxt]) >= MIN_ROWS:
+                chosen.append(nxt)
+        found[name] = chosen
     return found

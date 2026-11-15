@@ -176,6 +176,51 @@ class Index:
         rest = [h for h in self.search_rerank(query, k + len(head), qvec) if h.chunk.id not in seen]
         return (head + rest)[:k]
 
+    def search_routed_rewrite(
+        self,
+        query: str,
+        k: int,
+        rewrites: list[str],
+        qvec: np.ndarray | None = None,
+        max_routed: int = 4,
+        per_page: int = 1,
+    ) -> list[Hit]:
+        """Milestone 5: statement routing, then re-ranked searches for the question and each rewrite of it,
+        fused by reciprocal rank. Past the routed chunks, at most `per_page` chunks come from any one page,
+        so the top k covers more pages.
+        """
+        from filings_rag.statements import statement_pages, statements_for
+
+        q = embed_query(query) if qvec is None else qvec
+        doc = self.chunks[0].doc_name if self.chunks else ""
+        pages = {p for name in statements_for(query) for p in statement_pages(doc).get(name, [])}
+        routed = [c for c in self.chunks if c.page in pages and c.kind == "table"]
+        if routed and self.vectors is not None:
+            pos = {c.id: i for i, c in enumerate(self.chunks)}
+            routed.sort(key=lambda c: -float(self.vectors[pos[c.id]] @ q))
+        out = [Hit(c, 1.0) for c in routed[:max_routed]]
+
+        fused: dict[str, float] = {}
+        by_id: dict[str, Chunk] = {}
+        for text, vec in [(query, q)] + [(r, None) for r in rewrites]:
+            for rank, hit in enumerate(self.search_rerank(text, 40, vec)):
+                fused[hit.chunk.id] = fused.get(hit.chunk.id, 0.0) + 1.0 / (RRF_K + rank + 1)
+                by_id[hit.chunk.id] = hit.chunk
+        seen = {h.chunk.id for h in out}
+        per: dict[int, int] = {}
+        for h in out:
+            per[h.chunk.page] = per.get(h.chunk.page, 0) + 1
+        for cid in sorted(fused, key=fused.get, reverse=True):
+            c = by_id[cid]
+            if len(out) >= k:
+                break
+            if cid in seen or per.get(c.page, 0) >= per_page:
+                continue
+            seen.add(cid)
+            per[c.page] = per.get(c.page, 0) + 1
+            out.append(Hit(c, fused[cid]))
+        return out
+
     def search(self, method: str, query: str, k: int, qvec: np.ndarray | None = None) -> list[Hit]:
         if method == "bm25":
             return self.search_bm25(query, k)

@@ -13,6 +13,7 @@ import json
 import re
 import statistics
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import pymupdf
 
@@ -29,6 +30,25 @@ _UNITS = re.compile(
     r"\bin (millions|thousands|billions)\b|\((millions|thousands|billions)\b",
     re.IGNORECASE,
 )
+# Pakistani reports: "Rupees in '000", "(Rupees in thousand)", "Rs. (Millions)", "(Rs. '000s)",
+# "(Amounts in thousand)". Tried
+# only when the pattern above finds nothing, so FinanceBench pages keep exactly the units they had.
+_PKR_UNITS = re.compile(
+    r"(?:\brupees|\brs\.?|\bamounts)\s*\(?\s*(?:in\s+)?(?:(thousand|million|billion)s?\b|[\u2018\u2019'`]?\s*000s?\b)",
+    re.IGNORECASE,
+)
+_PKR_ONES = re.compile(r"\.*rupees\.*", re.IGNORECASE)  # a column header of plain "Rupees" (Systems Ltd)
+
+
+def _units(lines: list[Line]) -> str | None:
+    head = " ".join(line.text for line in lines[:15])
+    if m := _UNITS.search(head):
+        return (m.group(1) or m.group(2)).lower()
+    if m := _PKR_UNITS.search(head):
+        return f"{m.group(1).lower()}s" if m.group(1) else "thousands"
+    if any(sum(bool(_PKR_ONES.fullmatch(c.strip())) for c in line.cells) >= 2 for line in lines[:15]):
+        return "rupees"
+    return None
 
 
 @dataclass
@@ -104,13 +124,11 @@ def parse_page(page: pymupdf.Page) -> ParsedPage:
         cells = _cells(vl)
         if cells:
             lines.append(Line(" | ".join(cells), cells, round(vl[0][1], 1), _is_row(cells)))
-    head = " ".join(line.text for line in lines[:15])
-    m = _UNITS.search(head)
-    units = (m.group(1) or m.group(2)).lower() if m else None
-    return ParsedPage(page.number, lines, units)
+    return ParsedPage(page.number, lines, _units(lines))
 
 
-def parse_document(doc_name: str) -> list[ParsedPage]:
+def parse_document(doc_name: str, path: Path | None = None) -> list[ParsedPage]:
+    """Parsed pages, cached by name. `path` is for PDFs outside FinanceBench (the PSX pilot)."""
     from filings_rag.cachefile import PDF_LOCK, atomic_write_text, lock_for
 
     cache = CACHE_DIR / f"{doc_name}.json"
@@ -118,7 +136,7 @@ def parse_document(doc_name: str) -> list[ParsedPage]:
         if cache.exists():
             raw = json.loads(cache.read_text(encoding="utf-8"))
             return [ParsedPage(p["page"], [Line(**ln) for ln in p["lines"]], p["units"]) for p in raw]
-        with PDF_LOCK, pymupdf.open(pdf_path(doc_name)) as pdf:  # PyMuPDF is not thread-safe
+        with PDF_LOCK, pymupdf.open(path or pdf_path(doc_name)) as pdf:  # PyMuPDF is not thread-safe
             pages = [parse_page(p) for p in pdf]
         atomic_write_text(cache, json.dumps([asdict(p) for p in pages]))
         return pages

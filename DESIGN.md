@@ -244,6 +244,35 @@ The silence of a terms page is not a licence: the reports remain each company's 
 relies on the same practice as the US phase (research use, no re-hosting, short attributed quotations),
 and any company that objects is removed.
 
+### Download and parse check (16 Nov 2026)
+
+`filings-rag psx-data` downloads the six reports from the company sites, five seconds apart, into the
+git-ignored `data/psx/`, and pins each file's SHA-256 in `data/psx/manifest.json`. Both Engro sites leave
+the issuing certificate out of their TLS chain. The downloader fetches it from the address in the site
+certificate, as browsers do, pins it by hash, and still requires the chain to end at a trusted root.
+
+- **Engro Fertilizers is unreadable without OCR.** 213 of its 249 pages have no text layer, and the
+  pages sampled had their text converted to vector outlines (thousands of shapes, no fonts). It stays in the list but out of the benchmark until
+  OCR is added. The other five have a text layer on 87–91% of pages.
+- **Tables parse as they are.** Rows, note columns and bracketed negatives come through unchanged.
+- **Statement finding needs its own rules.** Each report holds two full sets, unconsolidated (the
+  company's own) and consolidated (the group's). Titles differ from US filings ("Statement of Profit or
+  Loss", "Profit and Loss Account") and are often split over two lines. One report prints two statements
+  side by side on a page. The analysis section repeats the exact titles over six-year summaries and
+  vertical analyses.
+
+  `psx_statement_pages` (statements.py, `psx-v1`) handles these:
+  - A title must fill a whole line, cell or pair of lines.
+  - Look-alike sections are excluded.
+  - Pages are returned per basis.
+  - A continuation page must repeat the statement's date line.
+
+  It finds all three statements on both bases in all five reports (30 picks, each checked by hand
+  against the page heading). Questions will name their basis.
+- **Units.** Rupee forms ("Rupees in '000", "(Rs. '000s)", "Rs. (Millions)", "(Amounts in thousand)", a
+  "Rupees" column header) are now recognised. They are tried only after the US rule, so FinanceBench is
+  unchanged: statement picks are identical for all 84 filings and units for all 12,013 pages.
+
 ## 9. Risks
 
 - **Overfitting 150 questions.** Mitigated by the held-out split and by reporting development and test separately.

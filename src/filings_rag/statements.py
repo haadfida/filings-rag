@@ -137,3 +137,86 @@ def statement_pages(doc_name: str) -> dict[str, list[int]]:
                 chosen.append(nxt)
         found[name] = chosen
     return found
+
+
+# Pakistani (IFRS) annual reports, found by a separate path so FinanceBench routing cannot move.
+# They differ from US 10-Ks in three ways that matter here:
+# - Titles: "Statement of Profit or Loss", "Profit and Loss Account", "Statement of Financial Position",
+#   often split over two lines ("UNCONSOLIDATED STATEMENT OF" / "FINANCIAL POSITION").
+# - Each report usually holds two full sets: the company's own (unconsolidated) and the group's
+#   (consolidated). A set with no prefix is the company's own.
+# - The analysis section repeats the exact titles over six-year summaries and vertical analyses.
+# So a title must be the whole line (or two joined lines), and look-alike sections are excluded.
+PSX_STATEMENTS_VERSION = "psx-v1"
+BASES = ("unconsolidated", "consolidated")
+_BASIS = r"(?P<basis>(?:un)?consolidated\s+)?"
+PSX_TITLES = {
+    "balance_sheet": re.compile(_BASIS + r"(?:statement of financial position|balance sheet)", re.IGNORECASE),
+    "income_statement": re.compile(
+        _BASIS + r"(?:statement of profit (?:or|and) loss(?: account)?(?: and other comprehensive income)?|"
+        r"profit and loss account|income statement)",
+        re.IGNORECASE,
+    ),
+    "cash_flow": re.compile(_BASIS + r"(?:statement of cash flows?|cash flow statement)", re.IGNORECASE),
+}
+PSX_NOT_PRIMARY = re.compile(
+    r"at a glance|summary|analysis|horizontal|vertical|\b(?:five|six|ten) years?\b|quarterly|"
+    r"value add|direct method|\(continued\)|notes to",
+    re.IGNORECASE,
+)
+_ANY_STATEMENT = re.compile(r"statement of|statements|account\b", re.IGNORECASE)
+_PERIOD = re.compile(r"\bas at\b|\bfor the (?:year|period) ended\b", re.IGNORECASE)
+PSX_MIN_ROWS = 8  # a holding company's own profit or loss can be eleven lines long
+
+
+def _psx_titles(page) -> set[tuple[str, str]]:
+    """(statement, basis) for each primary statement titled in the page's heading.
+
+    Read cell by cell, because some reports print two statements side by side on one page, and a
+    title split over two lines is joined column by column.
+    """
+    head = [line for line in page.lines[:HEAD_LINES] if not line.is_row]
+    if any(len(line.cells) == 1 and PSX_NOT_PRIMARY.search(line.text) for line in head):
+        return set()
+    cells = [[" ".join(c.split()) for c in line.cells] for line in head]
+    options = [c for row in cells for c in row]
+    for a, b in zip(cells, cells[1:], strict=False):
+        if len(a) == len(b):
+            options += [f"{x} {y}" for x, y in zip(a, b, strict=True)]
+    found = set()
+    for text in options:
+        for name, title in PSX_TITLES.items():
+            if m := title.fullmatch(text):
+                found.add((name, (m.group("basis") or "unconsolidated").strip().lower()))
+    return found
+
+
+def psx_statement_pages(pages) -> dict[str, dict[str, list[int]]]:
+    """Zero-indexed pages of each primary statement, per basis: {basis: {statement: pages}}."""
+    titled = {p.page: _psx_titles(p) for p in pages}
+    by_page = {p.page: p for p in pages}
+    out: dict[str, dict[str, list[int]]] = {}
+    for basis in BASES:
+        cands = {
+            name: [
+                (p.page, _rows(p))
+                for p in pages
+                if (name, basis) in titled[p.page] and _rows(p) >= PSX_MIN_ROWS
+            ]
+            for name in PSX_TITLES
+        }
+        found = {}
+        for name, best in _choose(cands).items():
+            chosen = [best]
+            nxt = by_page.get(best + 1)
+            if nxt is not None and not titled[nxt.page] and _rows(nxt) >= PSX_MIN_ROWS:
+                head = " ".join(line.text for line in nxt.lines[:HEAD_LINES] if not line.is_row)
+                dated = _PERIOD.search(
+                    head
+                )  # a real continuation repeats "As at ..." / "For the year ended ..."
+                if dated and not _ANY_STATEMENT.search(head) and not PSX_NOT_PRIMARY.search(head):
+                    chosen.append(nxt.page)
+            found[name] = chosen
+        if found:
+            out[basis] = found
+    return out

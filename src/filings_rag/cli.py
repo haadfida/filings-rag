@@ -8,7 +8,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from filings_rag import data
+from filings_rag import data, psx
 from filings_rag.answer import MODES as answer_modes
 from filings_rag.benchmark import CONTRADICTORY_KEYS, load_documents, load_questions, split_of
 from filings_rag.llm import DEFAULT_MODEL, PRICES, load_dotenv
@@ -19,6 +19,19 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 def cmd_data(_: argparse.Namespace) -> int:
     report = data.download()
     print(f"downloaded {len(report.downloaded)}, already present {len(report.skipped)}")
+    for p in report.problems:
+        print(f"PROBLEM: {p}", file=sys.stderr)
+    print("data OK" if report.ok else f"{len(report.problems)} problem(s)")
+    return 0 if report.ok else 1
+
+
+def cmd_psx_data(_: argparse.Namespace) -> int:
+    report = psx.download()
+    print(f"downloaded {len(report.downloaded)}, already present {len(report.skipped)}")
+    for f in psx.FILINGS:
+        if psx.pdf_path(f).exists():
+            c = psx.check(f)
+            print(f"{c.name:20} {c.pages:4} pages, text layer on {c.text_pages} ({c.text_share:.0%})")
     for p in report.problems:
         print(f"PROBLEM: {p}", file=sys.stderr)
     print("data OK" if report.ok else f"{len(report.problems)} problem(s)")
@@ -104,6 +117,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="filings-rag")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("data", help="download and verify the FinanceBench open set").set_defaults(func=cmd_data)
+    sub.add_parser("psx-data", help="download the PSX pilot reports from company websites").set_defaults(
+        func=cmd_psx_data
+    )
     sub.add_parser("stats", help="summarise the downloaded benchmark").set_defaults(func=cmd_stats)
 
     r = sub.add_parser("run", help="answer and grade questions with a baseline (calls the API)")
